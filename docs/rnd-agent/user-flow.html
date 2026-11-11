@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>R&amp;D Agent — user flow</title>
+<style>:root{color-scheme:light dark;--bg:#f7f6f3;--fg:#1d1b16;--muted:#6b6558;--line:#e4e1da}@media(prefers-color-scheme:dark){:root{--bg:#15181a;--fg:#eceae4;--muted:#9a9890;--line:#2d3236}}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 system-ui,sans-serif}.w{max-width:900px;margin:0 auto;padding:24px 16px 60px}a{color:inherit}h1{font-size:1.6rem}p{color:var(--muted)}
+pre.mermaid{border:1px solid var(--line);border-radius:12px;padding:16px;overflow-x:auto;text-align:center;background:transparent}</style></head><body><div class="w">
+<p><a href="/work/rnd-agent/">← case study</a> · <a href="design.html">full design document</a></p>
+<h1>R&amp;D Agent: user flow</h1>
+<p>WhatsApp report in, a gateway reads it, a language step structures it, the Sheet API writes the daily log, the STEM agent reviews Drive and the curriculum sheet against it, a cross-check verifies, the sheet is updated, and a scoring matrix closes the loop.</p>
+<pre class="mermaid">
+flowchart TD
+    A["WhatsApp app&lt;br/&gt;STEM Educators reporting group&lt;br/&gt;daily report + follow-up"]
+    A --> B["Moltis gateway&lt;br/&gt;(OpenClaw)&lt;br/&gt;linked device, silent capture"]
+    B --> C{"Language step"}
+    C --> D["Groq&lt;br/&gt;llama-3.3-70b"]
+    C --> E["OpenRouter&lt;br/&gt;fallback model"]
+    D --> F["Sheet API"]
+    E --> F
+    F --> G["Sheet DB&lt;br/&gt;daily reporting log&lt;br/&gt;Branch × Month × Class"]
+    G --> H["STEM agent&lt;br/&gt;review pass"]
+    H --> I["Drive&lt;br/&gt;monthly / weekly folders"]
+    H --> J["Curicullam sheet&lt;br/&gt;STEM / KIPS / Lead × Class 1-8"]
+    I --> K["Cross-check / verify"]
+    J --> K
+    G --> K
+    K --> L["Update in Sheet"]
+    L --> M["Scoring matrix"]
+    </pre></div>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "default", securityLevel: "strict" });
+</script></body></html>

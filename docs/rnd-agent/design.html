@@ -1,0 +1,697 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<meta name="claude:viewport-fit-sides" content="cover" />
+<title>R&amp;D - Agent</title>
+<style>
+  /* layout: vertical pipeline — hero status strip, mermaid flow, stage cards, guardrails/limits two-column, footer next-steps */
+  :root {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --border: #e4e1da;
+    --fg: #1d1b16;
+    --muted: #6b6558;
+    --accent: #0f6e63;
+    --accent-soft: #e4f2ef;
+    --warn: #9a5b12;
+    --warn-soft: #fbeedd;
+    --bad: #9c3b2e;
+    --bad-soft: #fbe9e5;
+    --ok: #0f6e63;
+    --ok-soft: #e4f2ef;
+    --font-display: "Space Grotesk", "Inter", sans-serif;
+    --font-body: "Inter", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181a;
+      --surface: #1d2124;
+      --border: #2d3236;
+      --fg: #eceae4;
+      --muted: #9a9890;
+      --accent: #4fc7b8;
+      --accent-soft: #19302d;
+      --warn: #e0a45c;
+      --warn-soft: #332416;
+      --bad: #e27a69;
+      --bad-soft: #3a1f1a;
+      --ok: #4fc7b8;
+      --ok-soft: #19302d;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181a;
+    --surface: #1d2124;
+    --border: #2d3236;
+    --fg: #eceae4;
+    --muted: #9a9890;
+    --accent: #4fc7b8;
+    --accent-soft: #19302d;
+    --warn: #e0a45c;
+    --warn-soft: #332416;
+    --bad: #e27a69;
+    --bad-soft: #3a1f1a;
+    --ok: #4fc7b8;
+    --ok-soft: #19302d;
+    color-scheme: dark;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+    margin: 0;
+  }
+  .wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    padding-block: 28px 64px;
+  }
+  header.hero {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+  header.hero .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  header.hero h1 {
+    font-size: clamp(28px, 5vw, 38px);
+  }
+  header.hero p.sub {
+    color: var(--muted);
+    max-width: 60ch;
+    margin: 0;
+    font-size: 15px;
+  }
+
+  .status-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 5px 11px;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+  }
+  .pill.ok {
+    background: var(--ok-soft);
+    color: var(--ok);
+    border-color: color-mix(in srgb, var(--ok) 30%, var(--border));
+  }
+  .pill.warn {
+    background: var(--warn-soft);
+    color: var(--warn);
+    border-color: color-mix(in srgb, var(--warn) 30%, var(--border));
+  }
+  .pill.bad {
+    background: var(--bad-soft);
+    color: var(--bad);
+    border-color: color-mix(in srgb, var(--bad) 30%, var(--border));
+  }
+  .pill .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  section {
+    margin-top: 40px;
+  }
+  section > h2 {
+    font-size: 20px;
+    margin-bottom: 4px;
+  }
+  section > p.lead {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 4px 0 18px;
+    max-width: 70ch;
+  }
+
+  .mermaid {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    overflow-x: auto;
+  }
+
+  .stage-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+  }
+  .stage {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .stage .num {
+    font-family: var(--font-display);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .stage h3 {
+    font-size: 15px;
+  }
+  .stage p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .stage .tag {
+    align-self: flex-start;
+    margin-top: auto;
+  }
+
+  table.ref {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    margin-top: 14px;
+  }
+  table.ref th {
+    text-align: left;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.ref td {
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.ref tr:last-child td {
+    border-bottom: none;
+  }
+  .ov {
+    overflow-x: auto;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 14px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    min-width: 0;
+  }
+  .card h3 {
+    font-size: 15px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card ul {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    font-size: 13.5px;
+    color: var(--fg);
+  }
+  .card ul li::marker {
+    color: var(--muted);
+  }
+  .card ul li b {
+    font-weight: 600;
+  }
+
+  footer {
+    margin-top: 48px;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+</style>
+
+<div class="wrap">
+  <p style="margin:0 0 18px;font-size:13px"><a href="/work/rnd-agent/">← case study</a> · <a href="user-flow.html">diagram only</a></p>
+  <header class="hero">
+    <div class="eyebrow">STEM Activity Monitoring</div>
+    <h1>R&amp;D - Agent</h1>
+    <p class="sub">
+      One pipeline, three checks: did the campus report it, did the sheet show
+      it, did the Drive evidence land. Built for 10 campuses, one WhatsApp
+      group, no manual cross-referencing.
+    </p>
+    <div class="status-strip">
+      <span class="pill ok"
+        ><span class="dot"></span>Parser + cross-check: 20/20 tests
+        passing</span
+      >
+      <span class="pill ok"
+        ><span class="dot"></span>WhatsApp gateway: linked and connected</span
+      >
+      <span class="pill warn"
+        ><span class="dot"></span>Live test: scheduled for next morning
+        report</span
+      >
+    </div>
+  </header>
+
+  <section>
+    <h2>User flow</h2>
+    <p class="lead">
+      The exact chain: WhatsApp report in, Moltis gateway reads it, Groq or
+      OpenRouter does the language step, Sheet API writes it to the daily log,
+      the STEM agent reviews Drive + the curriculum sheet against it,
+      cross-check verifies, the sheet gets updated, scoring matrix closes the
+      loop.
+    </p>
+    <pre class="mermaid">
+flowchart TD
+    A["WhatsApp app&lt;br/&gt;STEM Educators reporting group&lt;br/&gt;daily report + follow-up"]
+    A --> B["Moltis gateway&lt;br/&gt;(OpenClaw)&lt;br/&gt;linked device, silent capture"]
+    B --> C{"Language step"}
+    C --> D["Groq&lt;br/&gt;llama-3.3-70b"]
+    C --> E["OpenRouter&lt;br/&gt;fallback model"]
+    D --> F["Sheet API"]
+    E --> F
+    F --> G["Sheet DB&lt;br/&gt;daily reporting log&lt;br/&gt;Branch × Month × Class"]
+    G --> H["STEM agent&lt;br/&gt;review pass"]
+    H --> I["Drive&lt;br/&gt;monthly / weekly folders"]
+    H --> J["Curicullam sheet&lt;br/&gt;STEM / KIPS / Lead × Class 1-8"]
+    I --> K["Cross-check / verify"]
+    J --> K
+    G --> K
+    K --> L["Update in Sheet"]
+    L --> M["Scoring matrix"]
+    </pre>
+  </section>
+
+  <section>
+    <h2>Test results</h2>
+    <p class="lead">
+      Everything below ran against real data from this account's own sheets and
+      the live WhatsApp group — not synthetic fixtures alone.
+    </p>
+    <div class="ov">
+      <table class="ref">
+        <tr>
+          <th>Component</th>
+          <th>Tests</th>
+          <th>Result</th>
+        </tr>
+        <tr>
+          <td>parse_whatsapp.py</td>
+          <td>
+            7 cases — field extraction, campus-name normalization, non-report
+            messages ignored
+          </td>
+          <td><span class="pill ok">7 / 7 passing</span></td>
+        </tr>
+        <tr>
+          <td>cross_check.py</td>
+          <td>
+            5 cases — completion vs. Drive evidence, activity vs. WhatsApp
+            report, clean campus produces no flag
+          </td>
+          <td><span class="pill ok">5 / 5 passing</span></td>
+        </tr>
+        <tr>
+          <td>agent_notes.py</td>
+          <td>
+            8 cases — incomplete log, status mismatch, open follow-up,
+            clean/blank rows produce no false flag
+          </td>
+          <td><span class="pill ok">8 / 8 passing</span></td>
+        </tr>
+        <tr>
+          <td>agent_notes.py — live dry run</td>
+          <td>Ran against the real Meetings / Sessions sheet (89 rows)</td>
+          <td>
+            <span class="pill ok"
+              >Caught a real case: a row marked "Completed" whose Action Points said the task was not completed; also caught 5 rows
+              logged with a date but never filled in</span
+            >
+          </td>
+        </tr>
+        <tr>
+          <td>WhatsApp group identification</td>
+          <td>
+            3 attempts to confirm the correct group JID before locking the
+            allowlist
+          </td>
+          <td>
+            <span class="pill ok"
+              >Confirmation-before-enable process caught 2 incorrect JIDs (a wrong group and a mis-synced ID) before any processing happened —
+              zero messages touched because policy stayed disabled until
+              confirmed</span
+            >
+          </td>
+        </tr>
+        <tr>
+          <td>Live message capture</td>
+          <td>Self-sent test message, then a group member's "test" message</td>
+          <td>
+            <span class="pill warn"
+              >Surfaced a real platform constraint: self-sent messages don't
+              log, and group bodies log empty even when captured — informs the
+              webhook-based capture route planned next</span
+            >
+          </td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Stages, one by one</h2>
+    <div class="stage-grid">
+      <div class="stage">
+        <span class="num">01</span>
+        <h3>WhatsApp capture</h3>
+        <p>
+          Moltis links as a WhatsApp device on your own number. No Business API,
+          no bot added to the group — it just sees what your number already
+          sees, once the group is on its allowlist.
+        </p>
+        <span class="pill ok">Connected</span>
+      </div>
+      <div class="stage">
+        <span class="num">02</span>
+        <h3>Field extraction</h3>
+        <p>
+          Regex parser reads the labeled report format (Date / Campus / Educator
+          / Resources Ready / etc.) straight from message text. No model call,
+          no hallucination risk.
+        </p>
+        <span class="pill ok">Built, tested</span>
+      </div>
+      <div class="stage">
+        <span class="num">03</span>
+        <h3>Sheet write</h3>
+        <p>
+          One row per report, appended to a new log tab on the STEM Data sheet —
+          additive only, never touches the educators' own weekly tracker cells.
+        </p>
+        <span class="pill ok">Script complete — live feed wiring next</span>
+      </div>
+      <div class="stage">
+        <span class="num">04</span>
+        <h3>Cross-check</h3>
+        <p>
+          Joins the WhatsApp log against <code>Dashboard_Data</code>, the
+          curriculum sheet, and Drive folder contents on Branch × Month × Class
+          — the same key the existing Apps Script already uses.
+        </p>
+        <span class="pill ok">Built, tested on real sheet schema</span>
+      </div>
+      <div class="stage">
+        <span class="num">05</span>
+        <h3>Scoring / flags</h3>
+        <p>
+          Flags contradictions, not just gaps: 100% complete with zero Drive
+          uploads, or logged activity with no matching WhatsApp report that
+          month.
+        </p>
+        <span class="pill ok">Built, tested</span>
+      </div>
+      <div class="stage">
+        <span class="num">06</span>
+        <h3>Groq review pass</h3>
+        <p>
+          A second-stage LLM analysis (via Moltis, using the free Groq tier)
+          summarizes flagged items in plain language — planned, not yet wired.
+          The extraction step never depends on it.
+        </p>
+        <span class="pill ok">Model configured — integration next</span>
+      </div>
+      <div class="stage">
+        <span class="num">07</span>
+        <h3>Meeting follow-up</h3>
+        <p>
+          Separate script scans the R&amp;D meeting-minutes sheet for rows that
+          were never filled in, or marked Completed while the text says
+          otherwise — real findings confirmed on your actual data.
+        </p>
+        <span class="pill ok"
+          >Built, tested, dry-run verified on live rows</span
+        >
+      </div>
+      <div class="stage">
+        <span class="num">08</span>
+        <h3>Weekly review pass</h3>
+        <p>
+          STEM agent runs the full cross-check once a week, not per-message —
+          catches drift (a campus quietly falling behind) that a single day's
+          report can't show. Output is advisory flags only, never an automatic
+          sheet correction.
+        </p>
+        <span class="pill ok">Cadence designed — scheduling next</span>
+      </div>
+      <div class="stage">
+        <span class="num">09</span>
+        <h3>Drive image recognition</h3>
+        <p>
+          Default behavior is presence-only: did a file land in the month's
+          folder, when, how many. No vision model reads the photo content by
+          default — Rysen's students are in these photos, and opening that up
+          needs its own explicit guardrail, not a side effect of counting files.
+        </p>
+        <span class="pill ok">By design — presence-check only</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Guardrails in place</h2>
+    <div class="two-col">
+      <div class="card">
+        <h3>Scope</h3>
+        <ul>
+          <li>
+            <b>DM policy: disabled</b> — never responds to or logs private
+            messages.
+          </li>
+          <li>
+            <b>Group policy: allowlist</b> — processes exactly one confirmed
+            group JID, nothing else.
+          </li>
+          <li>
+            <b>Mention mode: none</b> — never sends a visible reply, in this
+            group or any other, regardless of policy.
+          </li>
+          <li>
+            Every policy change made through the account's own stored config,
+            verified by reading it back before trusting it.
+          </li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Sheet safety</h3>
+        <ul>
+          <li>
+            Writes are additive only — new rows, new columns. Never edits an
+            existing educator-entered cell.
+          </li>
+          <li>
+            Cell values starting with <code>= + - @</code> get prefixed before
+            writing, so nothing can execute as a formula (same rule used on the
+            meeting-minutes pipeline).
+          </li>
+          <li>
+            Meeting-notes flags are rule-based, not model-guessed — no
+            fabricated "this was resolved" claims on a real log.
+          </li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Weekly review scope</h3>
+        <ul>
+          <li>
+            Runs once a week against the full month's data, not live per message
+            — reduces false alarms from a campus simply being mid-week.
+          </li>
+          <li>
+            Output is a flag list for a human to read, never an automatic
+            correction written into anyone's tracker row.
+          </li>
+          <li>
+            Every flag names the exact rule that fired (completion vs. Drive,
+            activity vs. WhatsApp) — no unexplained score.
+          </li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Drive image recognition</h3>
+        <ul>
+          <li>
+            <b>Off by default.</b> The agent checks that a file exists for the
+            month — filename, timestamp, count — and stops there.
+          </li>
+          <li>
+            No face recognition, no student identification, no model reading the
+            image itself, under any configuration this agent ships with.
+          </li>
+          <li>
+            If content-level checking (e.g. "does this photo actually show a
+            robotics session") is ever wanted, it needs its own explicit
+            sign-off and its own guardrail card — not a quiet addition to the
+            presence check.
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Eval audit</h2>
+    <p class="lead">
+      How accuracy gets measured before this runs unattended — not a one-time
+      check, a recurring one.
+    </p>
+    <div class="two-col">
+      <div class="card">
+        <h3>Golden set</h3>
+        <ul>
+          <li>
+            Once a week of live WhatsApp reports exists, hand-label the correct
+            Campus / Educator / Resources Ready / Support Required fields for
+            every message that week.
+          </li>
+          <li>
+            Run <code>parse_whatsapp.py</code> against the same messages, diff
+            its output against the hand-labeled set.
+          </li>
+          <li>
+            Track two numbers: extraction accuracy (fields correct ÷ fields
+            present) and miss rate (real reports the parser didn't recognize at
+            all).
+          </li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Flag precision</h3>
+        <ul>
+          <li>
+            For every flag <code>cross_check.py</code> raises, confirm by hand
+            whether it was a real gap or a false alarm (e.g. Drive upload
+            delayed, not missing).
+          </li>
+          <li>
+            A false-positive rate above a set threshold pauses automatic
+            flagging for that rule until the logic is corrected — never let a
+            noisy rule train you to ignore all flags.
+          </li>
+          <li>
+            Re-run this audit after any change to the parser or the cross-check
+            join logic, not just on a fixed schedule.
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Known limitations</h2>
+    <p class="lead">
+      Found by testing against the real group today, not assumed in advance.
+    </p>
+    <div class="ov">
+      <table class="ref">
+        <tr>
+          <th>Limitation</th>
+          <th>What it means</th>
+        </tr>
+        <tr>
+          <td>Group JID only appears after a <i>new</i> message</td>
+          <td>
+            Moltis doesn't bulk-sync dormant chat history — a group with no
+            activity since pairing stays invisible locally until someone posts
+            in it.
+          </td>
+        </tr>
+        <tr>
+          <td>Self-sent messages aren't logged</td>
+          <td>
+            The access-log table only captures inbound messages that need a
+            routing decision. A message you send yourself never triggers it.
+          </td>
+        </tr>
+        <tr>
+          <td>Group message bodies log empty</td>
+          <td>
+            Direct/individual messages capture full text; group messages so far
+            have logged with an empty body in every case seen. Likely a built-in
+            privacy boundary, not a policy setting — the webhook route is the
+            planned fix.
+          </td>
+        </tr>
+        <tr>
+          <td>No CLI <code>send</code> or <code>join</code> yet</td>
+          <td>
+            Both are present in the CLI but return "not yet implemented" in this
+            build. Sending test messages or joining groups has to happen from
+            the phone.
+          </td>
+        </tr>
+        <tr>
+          <td>Campus name spelling drift</td>
+          <td>
+            Drive folder names and sheet tab names don't always match exactly
+            (for example two spellings of the same town) — normalized in
+            the parser, worth re-checking if a new campus is added.
+          </td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    rnd-agents/stem_activity_agent — R&amp;D - Agent, built alongside
+    meeting_agent, same house rules: dry-run by default, deterministic
+    extraction over model guesses, additive sheet writes only.
+  </footer>
+</div>
+
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "default", securityLevel: "strict" });
+</script>
+
+</body></html>
