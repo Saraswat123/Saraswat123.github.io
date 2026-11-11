@@ -1,0 +1,118 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>User Flows — Rysen Learning Centre</title><style>
+:root{color-scheme:dark;--bg:#0a0a0a;--fg:#e2e8f0;--muted:#94a3b8;--cyan:#00f5ff;--card:#111;--line:#1f1f1f}
+@media (prefers-color-scheme:light){:root{color-scheme:light;--bg:#f1f5f9;--fg:#0f172a;--muted:#475569;--cyan:#0369a1;--card:#fff;--line:#cbd5e1}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.7 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:24px 16px 80px}
+nav.top{display:flex;flex-wrap:wrap;gap:6px 14px;font:13px ui-monospace,Menlo,monospace;margin-bottom:28px}
+nav.top a{color:var(--muted);text-decoration:none}nav.top a:hover,nav.top a.on{color:var(--cyan)}
+h1{font-size:2rem;line-height:1.2;margin:.2em 0 .6em}h2{font-size:1.35rem;margin:2em 0 .5em;color:var(--cyan)}h3{font-size:1.1rem;margin:1.6em 0 .4em}h4{margin:1.2em 0 .3em}
+p,li{color:var(--fg)}a{color:var(--cyan)}code{font:.88em ui-monospace,Menlo,monospace;background:var(--card);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto;font:13px/1.5 ui-monospace,Menlo,monospace}pre code{background:none;border:0;padding:0}
+pre.mermaid{background:transparent;border:1px solid var(--line);text-align:center;padding:18px;overflow-x:auto}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.92rem}th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600}
+blockquote{border-left:3px solid var(--cyan);margin:1em 0;padding:.2em 1em;color:var(--muted)}hr{border:0;border-top:1px solid var(--line);margin:2em 0}
+</style></head><body><div class="wrap">
+<nav class="top"><a href="/work/rysen-learning-centre/">← case study</a><a href="product-overview.html">Product overview</a><a href="hld.html">High-level design</a><a href="lld.html">Low-level design</a><a href="user-flows.html" class="on">User flows</a><a href="tech-stack.html">Tech stack</a><a href="testing.html">Testing</a><a href="documentation-hub.pdf">Documentation hub (PDF)</a></nav>
+<h1>User Flows</h1>
+<p>What each role actually clicks through. Written for product review, QA scripting, and anyone new to the team — no code required to follow this page; see <code>LLD.md</code> if you want the request/response detail behind any step.</p>
+<h2>Student</h2>
+<pre class="mermaid">flowchart TD
+    A[Open /student/login] --&gt; B[Enter name + class + campus]
+    B --&gt; C{Has a PIN been set&lt;br/&gt;by their teacher?}
+    C --&gt;|No| D[Log in]
+    C --&gt;|Yes| E[Enter PIN]
+    E --&gt;|correct| D
+    E --&gt;|wrong| F["Details do not match"&lt;br/&gt;— same message as unknown student]
+    D --&gt; G[Dashboard: list of available tests&lt;br/&gt;for their campus + class]
+    G --&gt; H[Start a test]
+    H --&gt; I[Timed MCQ, per-student&lt;br/&gt;shuffled question/option order]
+    I --&gt; J{Submit before timer runs out,&lt;br/&gt;or timer expires}
+    J --&gt; K[See score immediately +&lt;br/&gt;correct answers per question]
+    K --&gt; L{Already attempted this test?}
+    L --&gt;|Yes, tries again| M["Already submitted" — blocked]
+    G --&gt; N[Leaderboard]</pre>
+<p><strong>Who can't do this:</strong> a student outside their campus never sees another campus's tests; an unpublished or out-of-schedule-window test never appears, and even if its ID is guessed directly, the server blocks it the same way.</p>
+<h2>Educator (teacher)</h2>
+<pre class="mermaid">flowchart TD
+    A[Open /login] --&gt; B{First time?}
+    B --&gt;|Yes| C[Request setup code by email]
+    C --&gt; D[Enter code + choose password]
+    D --&gt; E[Logged in]
+    B --&gt;|No| F[Email + password]
+    F --&gt; E
+
+    E --&gt; G[Dashboard: training journey +&lt;br/&gt;"Ask Rysen AI" banner]
+    G --&gt; H[Complete training stages&lt;br/&gt;— MCQ, pass threshold, limited attempts]
+    H --&gt; I{All stages in an&lt;br/&gt;enrolled programme passed?}
+    I --&gt;|Yes| J[Certificate auto-unlocks&lt;br/&gt;+ in-app notification]
+
+    G --&gt; K[Create/manage own students]
+    K --&gt; L[Create a test for them&lt;br/&gt;— question bank, schedule window]
+    L --&gt; M[Students take it; educator&lt;br/&gt;sees results + at-risk flags]
+
+    G --&gt; N[Assigned tasks]
+    N --&gt; O[Mark subtasks done,&lt;br/&gt;comment, ask AI about the task]
+
+    G --&gt; P[My Groups]
+    P --&gt; Q[Group chat with fellow educators&lt;br/&gt;+ group-scoped shared resources]
+
+    G --&gt; R[Monthly recognition]
+    R --&gt; S[Star rating, rank, leaderboard]
+    S --&gt; T{Top 3 this month?}
+    T --&gt;|Yes| U[Certificate download unlocks]</pre>
+<p><strong>Who can't do this:</strong> an educator never sees or edits another campus's tests or students (except all-campus/legacy ones, which they can _read_ but not edit); they only see tasks they're actually assigned to, not every task in the system.</p>
+<h2>Principal (campus head)</h2>
+<pre class="mermaid">flowchart TD
+    A[Open /principal/login] --&gt; B[Email + password&lt;br/&gt;— same setup/login flow as educators]
+    B --&gt; C[Dashboard]
+    C --&gt; D[Campus Progress&lt;br/&gt;— every educator at this campus,&lt;br/&gt;their training completion]
+    C --&gt; E[My Journey&lt;br/&gt;— own training, same stage&lt;br/&gt;system as educators]
+    C --&gt; F[Leaderboard]</pre>
+<p>A principal's view is deliberately narrow: oversight of their own campus's educators, plus their own training — not student data, not other campuses.</p>
+<h2>Admin (head office)</h2>
+<pre class="mermaid">flowchart TD
+    A[Open /admin/login] --&gt; B[Email + password]
+    B --&gt; C[Dashboard]
+
+    C --&gt; D[Campuses, Educators, Principals,&lt;br/&gt;Students — CRUD, bulk import/delete,&lt;br/&gt;branch-grouped accordion]
+    C --&gt; E[Programs + Stages&lt;br/&gt;— build training content, MCQ builder]
+    C --&gt; F[Student Tests&lt;br/&gt;— publish/draft, campus-scoped]
+
+    C --&gt; G[Task Directory]
+    G --&gt; H[Create task + subtasks + resources]
+    H --&gt; I[Assign to one educator&lt;br/&gt;or a whole Educator Group]
+    I --&gt; J[Task History&lt;br/&gt;— full timeline, per-educator completion]
+
+    C --&gt; K[Educator Groups]
+    K --&gt; L[Group chat, group-scoped resources,&lt;br/&gt;assign the whole group to a task at once]
+
+    C --&gt; M[Rewards &amp; Recognition]
+    M --&gt; N[Enter monthly star ratings&lt;br/&gt;per educator — AI suggests scores&lt;br/&gt;only for criteria with real tracked data]
+    N --&gt; O[Finalize the period]
+    O --&gt; P[Top 3 notified,&lt;br/&gt;certificate download unlocks for them]
+
+    C --&gt; Q[Branch Reports / Analytics]
+    Q --&gt; R[Pass rates per campus,&lt;br/&gt;AI-generated insights, Excel export]
+
+    C --&gt; S[Google Sheets sync button]
+    S --&gt; T[Live roster + test results&lt;br/&gt;pushed to a shared spreadsheet]
+
+    C --&gt; U[Settings]
+    U --&gt; V[Manual trigger: cleanup cron,&lt;br/&gt;weekly digest, welcome emails]</pre>
+<p><strong>The one thing that happens without an admin clicking anything:</strong> the weekly digest email (every Sunday, Vercel Cron) and the nightly cleanup of old notifications and orphaned uploaded files. Everything else in this column is admin-initiated.</p>
+<h2>Cross-cutting: what happens on a password reset</h2>
+<p>This one spans two roles, which is why it's easy to get wrong and worth tracing on its own:</p>
+<pre class="mermaid">flowchart LR
+    A[Admin clicks&lt;br/&gt;"Reset Password"&lt;br/&gt;on an educator] --&gt; B[Server clears&lt;br/&gt;User.password to null]
+    B --&gt; C[Server deletes every&lt;br/&gt;Session row for that user]
+    C --&gt; D[Educator is signed out&lt;br/&gt;on every device immediately]
+    D --&gt; E[Educator's next login attempt&lt;br/&gt;returns NO_PASSWORD]
+    E --&gt; F[Routed to first-time setup&lt;br/&gt;— email code, new password]</pre>
+<p>Before this was fixed, step C didn't happen: an educator's _existing_ sessions stayed valid after a reset, so "reset their password" didn't actually lock out someone who already had an active session — only future logins were gated. The flow above is the current, corrected behavior.</p>
+</div>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const dark = !window.matchMedia("(prefers-color-scheme: light)").matches;
+mermaid.initialize({startOnLoad:true, theme: dark ? "dark" : "default", securityLevel:"strict"});
+</script></body></html>

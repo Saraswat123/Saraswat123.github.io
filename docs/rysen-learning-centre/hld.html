@@ -1,0 +1,61 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>High-Level Design — Rysen Learning Centre</title><style>
+:root{color-scheme:dark;--bg:#0a0a0a;--fg:#e2e8f0;--muted:#94a3b8;--cyan:#00f5ff;--card:#111;--line:#1f1f1f}
+@media (prefers-color-scheme:light){:root{color-scheme:light;--bg:#f1f5f9;--fg:#0f172a;--muted:#475569;--cyan:#0369a1;--card:#fff;--line:#cbd5e1}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.7 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:24px 16px 80px}
+nav.top{display:flex;flex-wrap:wrap;gap:6px 14px;font:13px ui-monospace,Menlo,monospace;margin-bottom:28px}
+nav.top a{color:var(--muted);text-decoration:none}nav.top a:hover,nav.top a.on{color:var(--cyan)}
+h1{font-size:2rem;line-height:1.2;margin:.2em 0 .6em}h2{font-size:1.35rem;margin:2em 0 .5em;color:var(--cyan)}h3{font-size:1.1rem;margin:1.6em 0 .4em}h4{margin:1.2em 0 .3em}
+p,li{color:var(--fg)}a{color:var(--cyan)}code{font:.88em ui-monospace,Menlo,monospace;background:var(--card);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto;font:13px/1.5 ui-monospace,Menlo,monospace}pre code{background:none;border:0;padding:0}
+pre.mermaid{background:transparent;border:1px solid var(--line);text-align:center;padding:18px;overflow-x:auto}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.92rem}th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600}
+blockquote{border-left:3px solid var(--cyan);margin:1em 0;padding:.2em 1em;color:var(--muted)}hr{border:0;border-top:1px solid var(--line);margin:2em 0}
+</style></head><body><div class="wrap">
+<nav class="top"><a href="/work/rysen-learning-centre/">← case study</a><a href="product-overview.html">Product overview</a><a href="hld.html" class="on">High-level design</a><a href="lld.html">Low-level design</a><a href="user-flows.html">User flows</a><a href="tech-stack.html">Tech stack</a><a href="testing.html">Testing</a><a href="documentation-hub.pdf">Documentation hub (PDF)</a></nav>
+<h1>High-Level Design</h1>
+<p>System-level view: the major pieces, how they talk to each other, and the decisions that shape everything downstream. For how a specific feature works, see <code>LLD.md</code>.</p>
+<h2>System diagram</h2>
+<pre class="mermaid">flowchart LR
+    Users["Students / Educators / Principals / Admins&lt;br/&gt;(browser, 15 campuses)"]
+    Turnstile["Cloudflare Turnstile&lt;br/&gt;(captcha)"]
+
+    subgraph Vercel["Vercel"]
+        NextJS["Next.js 16 App Router&lt;br/&gt;serverless API routes"]
+        RateLimit["Rate limit + sessions&lt;br/&gt;(Postgres-backed)"]
+        Blob["Vercel Blob&lt;br/&gt;(resource/upload files)"]
+        Cron["Vercel Cron&lt;br/&gt;(nightly cleanup, weekly digest)"]
+    end
+
+    Neon["Neon Postgres&lt;br/&gt;(Prisma 7 + pg pool)"]
+    Sheets["Google Sheets&lt;br/&gt;(OAuth2 refresh token)"]
+    Notify["Brevo/Resend · Twilio · Groq&lt;br/&gt;(email · WhatsApp · AI chat)"]
+
+    Users -- "solve captcha" --&gt; Turnstile
+    Users -- HTTPS --&gt; NextJS
+    Turnstile -- "verify token" --&gt; NextJS
+    NextJS -- "check + session" --&gt; RateLimit
+    NextJS -- "Prisma / SQL" --&gt; Neon
+    NextJS -- upload --&gt; Blob
+    Cron -- "CRON_SECRET" --&gt; NextJS
+    NextJS -. "sync rows" .-&gt; Sheets
+    NextJS -. "notify / remind / AI chat" .-&gt; Notify</pre>
+<h2>The decisions that shape everything else</h2>
+<p><strong>One app, four portals, one API.</strong> Admin, educator, principal, and student each get their own route tree (<code>app/admin</code>, <code>app/educator</code>, <code>app/principal</code>, <code>app/student</code>) and their own session cookie (staff share <code>rysen_session</code>; students get <code>rysen_student_session</code>), but every portal calls into the same <code>app/api/**/route.ts</code> handlers. There is no separate backend service — the API routes _are_ the backend, deployed as part of the same Next.js build.</p>
+<p><strong>No background workers.</strong> The only thing that runs on a schedule is Vercel Cron (nightly cleanup, weekly digest). Everything else is synchronous request → response. The one case that looks like it needs a queue — updating a Google Sheet after a student submits a test — uses <code>after()</code> to keep the serverless function alive just long enough to finish that one write after the response has already gone back to the student, rather than making the student wait for a third-party API, and without spinning up a queue for a single use case.</p>
+<p><strong>Sessions are rows, not tokens.</strong> A JWT would mean one fewer database query per request, but it would also mean a compromised or reset credential stays valid until it expires on its own. Every session is a row in the <code>Session</code> table; revoking it (password reset, deactivation) is one <code>DELETE</code>.</p>
+<p><strong>The database heals itself, carefully.</strong> A fresh Neon database has none of the app's tables. Rather than require someone to SSH in and run migrations before the app can even show a login page, <code>lib/schema-heal.ts</code> checks <code>information_schema</code> on cold start and creates exactly the columns/tables auth needs (nothing else) under a short lock timeout, so a busy table can never queue every login behind a stuck DDL statement. The full migration list (<code>lib/migrations.ts</code>) runs once an admin actually logs in. Each entry's <code>check</code> query decides whether it still needs to run — this is also the exact mechanism that once had a bug (see <code>TESTING.md</code>): an inverted check meant a legacy-table-drop ran on _every_ admin session instead of only when the legacy table shape was actually present.</p>
+<p><strong>External services are additive, never load-bearing.</strong> Email, WhatsApp, Google Sheets sync, and the AI assistant can all be completely unconfigured and the core product (login, take a test, complete training, manage students) still works end to end. Each one checks its own env vars and no-ops or falls back rather than failing the request that triggered it.</p>
+<h2>Component responsibilities</h2>
+<div class='tw'><table><thead><tr><th>Component</th><th>Responsibility</th><th>Does NOT do</th></tr></thead><tbody><tr><td>Next.js App Router pages</td><td>Render the UI per portal/role; call the API, hold client-side state</td><td>Query the database directly, verify permissions</td></tr><tr><td>API route handlers</td><td>Authenticate the session, check the caller's role/campus/ownership, query Prisma, shape the response</td><td>Render HTML, know about any specific portal's UI</td></tr><tr><td><code>lib/auth.ts</code> / <code>lib/student-auth.ts</code></td><td>Create, read, and revoke sessions</td><td>Decide _who's allowed to do what_ — that's per-route</td></tr><tr><td><code>lib/branch-scope.ts</code>, <code>lib/task-access.ts</code>, <code>lib/stage-audience.ts</code>, <code>lib/student-test-access.ts</code></td><td>The actual access-control rules (campus scoping, task assignment, stage/attempt gating), each testable as pure functions</td><td>Touch the database themselves — callers pass in the already-fetched record</td></tr><tr><td><code>lib/rate-limit.ts</code></td><td>Count attempts per key per window, shared across serverless instances</td><td>Decide what should be rate-limited — each route picks its own key and limit</td></tr><tr><td>Prisma + Neon</td><td>Durable storage, relational integrity (cascades, uniqueness), indexes</td><td>Business logic</td></tr><tr><td>Vercel Cron</td><td>Fire two scheduled requests</td><td>Retry on failure, queue work, run anything else</td></tr></tbody></table></div>
+<h2>What scales and what doesn't (yet)</h2>
+<p><strong>Scales fine as campus count grows:</strong> the data model is already campus-scoped (<code>branchId</code> on every relevant table, 14 indexes on the hot query paths), and adding a campus is a row insert, not a code change.</p>
+<p><strong>Would need attention past a few hundred concurrent users:</strong> the Postgres connection pool is capped low per serverless instance (<code>DB_POOL_MAX</code>, default 5) specifically because many concurrent Vercel instances × a larger pool would exhaust Neon's connection limit — this trades per-instance throughput for safety at scale, and is the first thing to revisit if traffic grows. See <code>HANDOVER.md</code> → "What breaks first" for the other two known pressure points (Google Sheets quota, OAuth token expiry).</p>
+<p><strong>Not built for:</strong> true real-time (group chat polls every 5 seconds, not a websocket); multi-region (Vercel is pinned to <code>iad1</code>, US East, regardless of where campuses actually are); offline use (every page assumes a live API call).</p>
+</div>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const dark = !window.matchMedia("(prefers-color-scheme: light)").matches;
+mermaid.initialize({startOnLoad:true, theme: dark ? "dark" : "default", securityLevel:"strict"});
+</script></body></html>

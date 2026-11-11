@@ -1,0 +1,64 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Testing — Rysen Learning Centre — Rysen Learning Centre</title><style>
+:root{color-scheme:dark;--bg:#0a0a0a;--fg:#e2e8f0;--muted:#94a3b8;--cyan:#00f5ff;--card:#111;--line:#1f1f1f}
+@media (prefers-color-scheme:light){:root{color-scheme:light;--bg:#f1f5f9;--fg:#0f172a;--muted:#475569;--cyan:#0369a1;--card:#fff;--line:#cbd5e1}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.7 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:24px 16px 80px}
+nav.top{display:flex;flex-wrap:wrap;gap:6px 14px;font:13px ui-monospace,Menlo,monospace;margin-bottom:28px}
+nav.top a{color:var(--muted);text-decoration:none}nav.top a:hover,nav.top a.on{color:var(--cyan)}
+h1{font-size:2rem;line-height:1.2;margin:.2em 0 .6em}h2{font-size:1.35rem;margin:2em 0 .5em;color:var(--cyan)}h3{font-size:1.1rem;margin:1.6em 0 .4em}h4{margin:1.2em 0 .3em}
+p,li{color:var(--fg)}a{color:var(--cyan)}code{font:.88em ui-monospace,Menlo,monospace;background:var(--card);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto;font:13px/1.5 ui-monospace,Menlo,monospace}pre code{background:none;border:0;padding:0}
+pre.mermaid{background:transparent;border:1px solid var(--line);text-align:center;padding:18px;overflow-x:auto}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.92rem}th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600}
+blockquote{border-left:3px solid var(--cyan);margin:1em 0;padding:.2em 1em;color:var(--muted)}hr{border:0;border-top:1px solid var(--line);margin:2em 0}
+</style></head><body><div class="wrap">
+<nav class="top"><a href="/work/rysen-learning-centre/">← case study</a><a href="product-overview.html">Product overview</a><a href="hld.html">High-level design</a><a href="lld.html">Low-level design</a><a href="user-flows.html">User flows</a><a href="tech-stack.html">Tech stack</a><a href="testing.html" class="on">Testing</a><a href="documentation-hub.pdf">Documentation hub (PDF)</a></nav>
+<h1>Testing — Rysen Learning Centre</h1>
+<p>This covers the automated suite added 2026-11-10 (78 tests, 8 files) and the manual checks that still have to be done by hand because they need a real browser or a real Google Sheet. Read this before trusting a green build, and before adding a new route or page — most new work should add a test in the matching layer below.</p>
+<h2>Run it</h2>
+<pre><code>npm test              # one run, CI mode
+npm run test:watch    # re-runs on file change</code></pre>
+<p>No <code>.env</code> needed. The database tests spin up a throwaway Postgres in-process (<code>@electric-sql/pglite</code>) and apply the real Prisma schema to it — nothing touches Neon. The API tests mock Prisma entirely (<code>tests/api/harness.ts</code>). Nothing in this suite makes a network call, sends an email, or hits Google Sheets for real.</p>
+<h2>Layers, bottom to top</h2>
+<h3>1. Database — <code>tests/db/</code></h3>
+<p>Real SQL against a real (ephemeral) Postgres, not mocks. This is the layer that catches schema and migration bugs the other two layers can't see, because they never run actual SQL.</p>
+<ul>
+<li><code>tests/db/global-setup.ts</code> runs <code>prisma migrate diff --from-empty</code> once per test run and hands every test the exact DDL Prisma would generate for <code>prisma/schema.prisma</code>.</li>
+<li><code>tests/db/pg.ts</code> — <code>freshDatabase()</code> applies that DDL to a new PGlite instance; helpers (<code>insertBranch</code>, <code>insertUser</code>, <code>insertStudent</code>, <code>insertTest</code>, <code>id()</code>) build minimal rows.</li>
+<li><code>schema-and-migrations.test.ts</code> — the schema applies cleanly; every entry in <code>lib/migrations.ts</code> runs without error and is idempotent (running the list twice leaves nothing pending); all 14 indexes get created; the EducatorRating legacy-drop migration only fires when the legacy <code>kra1</code> column is actually present (this was the bug that wiped ratings every admin session — see <code>d1e753c</code>).</li>
+<li><code>integrity.test.ts</code> — the rate-limit SQL counts correctly and resets per window; cascade deletes work (deleting a student removes their attempts and sessions; deleting an educator removes their sessions and progress); unique constraints hold.</li>
+</ul>
+<p><strong>When to add here:</strong> you change <code>prisma/schema.prisma</code>, add an entry to <code>lib/migrations.ts</code>, or add a raw SQL statement anywhere (<code>$executeRaw</code>, <code>$queryRaw</code>). If you can't picture the exact row a migration should produce, this layer will show you.</p>
+<h3>2. API routes — <code>tests/api/</code></h3>
+<p>Each test imports the real route handler from <code>app/api/.../route.ts</code> and calls it directly with a <code>NextRequest</code> — no HTTP server, no browser. <code>tests/api/harness.ts</code> replaces <code>@/lib/db</code> with a Proxy that hands out <code>vi.fn()</code> Prisma methods per model, so a test asserts on the exact <code>where</code>/<code>data</code> a route sent to the database instead of needing a real one.</p>
+<ul>
+<li><code>admin-security.test.ts</code> — the admin/privilege-escalation regressions: an ADMIN can't promote themselves via <code>PUT /api/educators/[id]</code>, can't touch a SUPER_ADMIN account through the educator route, the seed-MCQ endpoint requires a session, the stage answer key is hidden from non-admins, cron routes refuse an empty <code>CRON_SECRET</code>.</li>
+<li><code>student-flows.test.ts</code> — student PIN login (same error for "no such student" and "wrong PIN"), rate limiting, test-attempt gating (published/campus/window), the one-attempt cap, that correct answers never reach a student before they submit.</li>
+<li><code>staff-auth-and-scoping.test.ts</code> — educator/admin/principal login give identical responses for unknown account vs wrong password (no enumeration), campus mismatch is checked only after the password, the setup-OTP guess cap, and educator campus scoping (can't edit another campus's test, can't move a student to another campus, sees nothing with no campus assigned).</li>
+</ul>
+<p><strong>When to add here:</strong> you add or change a route handler, especially anything touching a role check, an id ownership check, or a rate limit. If you can describe the bug as "user X could do Y to record Z", this is where the test goes — mock the Prisma call that would prove X did or didn't happen.</p>
+<h3>3. Unit — <code>tests/unit/</code></h3>
+<p>Pure functions and small modules, no mocking needed.</p>
+<ul>
+<li><code>access-rules.test.ts</code> — every access-decision helper in <code>lib/</code> tested directly against its own truth table: <code>studentTestBlock</code>, <code>isAnswerMap</code>, <code>canAccessBranchRecord</code>, <code>educatorBranchListWhere</code>, <code>countedStageWhere</code>, <code>isStageForRole</code>, <code>educatorCanAccessStudent</code>, <code>educatorStudentWhere</code>.</li>
+<li><code>otp-and-email.test.ts</code> — the setup-OTP token survives round-trip verification, rejects a wrong code, rejects a tampered/re-signed token, and (the regression this exists for) its JWT payload can no longer be brute-forced offline the way the old plain-<code>sha256(otp)</code> version could; <code>escapeHtml</code> neutralises HTML in user-entered names before they reach an email template.</li>
+<li><code>google-sheets.test.ts</code> — against a stubbed <code>fetch</code>: headers have exactly as many columns as a data row (the old off-by-one); a sync writes the new rows before clearing the leftover tail, so a failed write can't empty the sheet; a failed write throws instead of reporting success; per-attempt updates match by student id, not by the first same-name/same-campus row.</li>
+</ul>
+<p><strong>When to add here:</strong> a pure function in <code>lib/</code> with no DB and no network. If it needs <code>vi.fn()</code> on more than one or two things, it probably belongs in <code>tests/api/</code> instead.</p>
+<h2>What this suite does NOT cover (do these by hand)</h2>
+<ul>
+<li><strong>Any real browser flow.</strong> No Playwright/Cypress yet. Before a release, click through at least: student login + PIN, submit a test, educator login + password setup, admin bulk delete, mobile menu on a phone-width viewport.</li>
+<li><strong>Google Sheets against the real API.</strong> The unit tests stub <code>fetch</code>; they prove the _shape_ of the requests is right, not that Google accepts them. After touching <code>lib/google-sheets.ts</code>, click "Sync to Sheet" in the admin Students page against the real sheet once.</li>
+<li><strong>Email delivery</strong> (Brevo/Resend) and <strong>Groq AI calls</strong> — not exercised at all.</li>
+<li><strong>Vercel Cron</strong> — the auth check is unit-tested; the actual scheduled invocation is not. Check Vercel's cron logs after a deploy that touches <code>app/api/admin/cleanup</code> or <code>weekly-digest</code>.</li>
+<li><strong>Load/concurrency</strong> — the one-attempt-per-test and MCQ-attempt-cap locks use Postgres advisory locks (<code>pg_advisory_xact_lock</code>); PGlite accepts the call but doesn't model real concurrent transactions, so a genuine race-condition test would need a real Postgres with two connections. Not done here.</li>
+</ul>
+<h2>CI</h2>
+<p><code>.github/workflows/ci.yml</code> runs on every push and PR: install, <code>prisma generate</code>, <code>npm run lint</code>, <code>tsc --noEmit</code>, <code>npm test</code>, <code>npm run build</code>. A red check on a PR means one of those failed — read the job output, don't just re-run it.</p>
+</div>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const dark = !window.matchMedia("(prefers-color-scheme: light)").matches;
+mermaid.initialize({startOnLoad:true, theme: dark ? "dark" : "default", securityLevel:"strict"});
+</script></body></html>

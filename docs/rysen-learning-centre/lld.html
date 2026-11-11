@@ -1,0 +1,127 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Low-Level Design — Rysen Learning Centre</title><style>
+:root{color-scheme:dark;--bg:#0a0a0a;--fg:#e2e8f0;--muted:#94a3b8;--cyan:#00f5ff;--card:#111;--line:#1f1f1f}
+@media (prefers-color-scheme:light){:root{color-scheme:light;--bg:#f1f5f9;--fg:#0f172a;--muted:#475569;--cyan:#0369a1;--card:#fff;--line:#cbd5e1}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.7 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:24px 16px 80px}
+nav.top{display:flex;flex-wrap:wrap;gap:6px 14px;font:13px ui-monospace,Menlo,monospace;margin-bottom:28px}
+nav.top a{color:var(--muted);text-decoration:none}nav.top a:hover,nav.top a.on{color:var(--cyan)}
+h1{font-size:2rem;line-height:1.2;margin:.2em 0 .6em}h2{font-size:1.35rem;margin:2em 0 .5em;color:var(--cyan)}h3{font-size:1.1rem;margin:1.6em 0 .4em}h4{margin:1.2em 0 .3em}
+p,li{color:var(--fg)}a{color:var(--cyan)}code{font:.88em ui-monospace,Menlo,monospace;background:var(--card);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto;font:13px/1.5 ui-monospace,Menlo,monospace}pre code{background:none;border:0;padding:0}
+pre.mermaid{background:transparent;border:1px solid var(--line);text-align:center;padding:18px;overflow-x:auto}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.92rem}th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600}
+blockquote{border-left:3px solid var(--cyan);margin:1em 0;padding:.2em 1em;color:var(--muted)}hr{border:0;border-top:1px solid var(--line);margin:2em 0}
+</style></head><body><div class="wrap">
+<nav class="top"><a href="/work/rysen-learning-centre/">← case study</a><a href="product-overview.html">Product overview</a><a href="hld.html">High-level design</a><a href="lld.html" class="on">Low-level design</a><a href="user-flows.html">User flows</a><a href="tech-stack.html">Tech stack</a><a href="testing.html">Testing</a><a href="documentation-hub.pdf">Documentation hub (PDF)</a></nav>
+<h1>Low-Level Design</h1>
+<p>How specific things actually work — the data model, the request flow for the two most intricate features, and the access-control building blocks every route composes from. Read <code>HLD.md</code> first if you haven't; this picks up where that leaves off.</p>
+<h2>Data model (core relationships)</h2>
+<pre class="mermaid">erDiagram
+    Branch ||--o{ User : "staff at"
+    Branch ||--o{ Student : "enrolled at"
+    Branch ||--o{ StudentTest : "scoped to (nullable = all)"
+
+    User ||--o{ Session : "has"
+    User ||--o{ StageProgress : "progresses through"
+    User ||--o{ ProgramEnrollment : "enrolled in"
+    User ||--o{ TaskAssignment : "assigned"
+
+    Program ||--o{ Stage : "contains"
+    Stage ||--o{ Question : "has"
+    Stage ||--o{ StageProgress : "tracked by"
+
+    Student ||--o{ StudentSession : "has"
+    Student ||--o{ StudentAttempt : "submits"
+    StudentTest ||--o{ StudentQuestion : "has"
+    StudentTest ||--o{ StudentAttempt : "receives"
+    StudentProgram ||--o{ StudentTest : "groups"
+
+    Task ||--o{ SubTask : "has"
+    Task ||--o{ TaskAssignment : "assigned to"
+    TaskAssignment ||--o{ SubTaskProgress : "tracks"
+
+    EducatorGroup ||--o{ EducatorGroupMember : "has"
+    EducatorGroup ||--o{ GroupMessage : "hosts"
+    EducatorGroup ||--|| RecognitionCategory : "scores against"
+    RecognitionCategory ||--o{ EducatorRating : "rated per period"</pre>
+<p>The full schema (40+ models) is in <code>prisma/schema.prisma</code>; this is the subset that explains how a request gets scoped to the right rows. Two fields recur everywhere and carry real meaning:</p>
+<ul>
+<li><strong><code>branchId</code> (nullable)</strong> — on <code>Student</code>, <code>StudentTest</code>, <code>StudentProgram</code>, <code>Program</code>. <code>null</code> means "applies to every campus," not "unset." An educator's queries always include both their own campus's rows and the <code>null</code> rows — see <code>educatorBranchListWhere()</code> in <code>lib/branch-scope.ts</code>.</li>
+<li><strong><code>createdById</code></strong> — on <code>Student</code>, <code>Task</code>, <code>TaskGroup</code>, <code>StudentProgram</code>. Combined with <code>branchId</code>, this is how ownership and campus scoping compose: an educator can always see what they created, plus campus-matching rows created before a specific cutoff date (<code>CREATED_BY_SCOPE_CUTOFF</code> in <code>lib/student-scope.ts</code> — students added before the per-educator attribution existed are grandfathered as branch-visible, since there's no way to know who _actually_ added them).</li>
+</ul>
+<h2>Access control: the shared building blocks</h2>
+<p>Every route that needs more than "is there a session" composes from a small set of pure, independently-tested functions rather than repeating role checks inline:</p>
+<div class='tw'><table><thead><tr><th>Function</th><th>File</th><th>Answers</th></tr></thead><tbody><tr><td><code>canAccessBranchRecord(user, record, mode)</code></td><td><code>lib/branch-scope.ts</code></td><td>Can this educator read/edit this campus-scoped row? (read = own campus + all-campus; edit = own campus only)</td></tr><tr><td><code>educatorStudentWhere(userId, branchId)</code></td><td><code>lib/student-scope.ts</code></td><td>The Prisma <code>where</code> clause for "students this educator can see," composing ownership + the legacy cutoff</td></tr><tr><td><code>countedStageWhere(role)</code> / <code>isStageForRole(stage, role)</code></td><td><code>lib/stage-audience.ts</code></td><td>Does this stage count toward _this role's_ completion (published + applicable-to-role)?</td></tr><tr><td><code>studentTestBlock(test, student, now)</code></td><td><code>lib/student-test-access.ts</code></td><td>Is this test published, in-campus, and inside its schedule window for this student right now?</td></tr><tr><td><code>canAccessTask(user, taskId)</code></td><td><code>lib/task-access.ts</code></td><td>Is this user an admin, or actually assigned to this task?</td></tr></tbody></table></div>
+<p>Each one takes already-fetched data and returns a decision — none of them query the database themselves, which is why <code>tests/unit/access-rules.test.ts</code> can test every branch of every rule with no mocking at all.</p>
+<h2>Flow 1: staff login + first-time setup</h2>
+<pre class="mermaid">sequenceDiagram
+    actor U as Educator/Admin/Principal
+    participant UI as Login page
+    participant API as /api/auth/{login,admin,principal}
+    participant RL as Rate limiter (Postgres)
+    participant TS as Turnstile
+    participant DB as Neon (User, Session)
+
+    U-&gt;&gt;UI: enter email + password
+    UI-&gt;&gt;API: POST {email, password, turnstileToken}
+    API-&gt;&gt;RL: check IP + email counters
+    alt over limit
+        RL--&gt;&gt;API: blocked
+        API--&gt;&gt;UI: 429 Too many attempts
+    else
+        RL--&gt;&gt;API: ok
+        API-&gt;&gt;TS: verify captcha token
+        API-&gt;&gt;DB: findUnique(email)
+        alt no account, wrong role, or no password set
+            API--&gt;&gt;UI: 401 Incorrect email or password&lt;br/&gt;(same message every way — no enumeration)
+        else password set but wrong
+            API--&gt;&gt;UI: 401 Incorrect email or password
+        else correct
+            API-&gt;&gt;DB: verify bcrypt hash
+            API-&gt;&gt;DB: create Session row
+            API--&gt;&gt;UI: 200 + httpOnly session cookie
+        end
+    end</pre>
+<p><strong>Why "no password set" and "wrong password" return the identical response:</strong> an attacker probing emails can't tell which ones exist in the system from the error alone. The one place this _does_ need to differ — a legitimate first-time user needs to be routed to setup, not just told "no" — is handled with a separate <code>code: 'NO_PASSWORD'</code> field the UI checks, which doesn't change the user-visible error text.</p>
+<p><strong>First-time setup</strong> (<code>lib/account-setup-otp.ts</code>) is a separate two-step flow, not a variant of login: <code>POST /api/auth/request-setup-otp</code> confirms the typed name matches an unset-password account, emails a 6-digit code, and returns a JWT whose payload carries only an <strong>HMAC</strong> of that code (keyed with a server secret the browser never sees — a plain hash would let the code be brute-forced offline from the readable JWT payload in under a second). <code>POST /api/auth/set-password</code> requires that code back, rate-limited to 5 guesses per emailed code, before it will set the password and create a session.</p>
+<h2>Flow 2: student submits a test</h2>
+<pre class="mermaid">sequenceDiagram
+    actor S as Student
+    participant UI as Test page
+    participant API as POST /api/student-tests/[id]/attempt
+    participant DB as Neon
+
+    S-&gt;&gt;UI: answer questions, submit (or timer expires)
+    UI-&gt;&gt;API: POST {answers}
+    API-&gt;&gt;DB: getStudentSession() via cookie
+    API-&gt;&gt;DB: findUnique(test) with questions
+    API-&gt;&gt;API: studentTestBlock() — published? right campus? inside window?
+    alt blocked
+        API--&gt;&gt;UI: 404/403
+    else allowed
+        API-&gt;&gt;DB: BEGIN, pg_advisory_xact_lock(studentId:testId)
+        API-&gt;&gt;DB: count prior attempts
+        alt already attempted
+            API--&gt;&gt;UI: 409 Already submitted
+        else
+            API-&gt;&gt;API: grade (score per question, compare against passScore)
+            API-&gt;&gt;DB: INSERT StudentAttempt, COMMIT
+            API--&gt;&gt;UI: 200 {score, passed, questions with correct answers}
+            API-)DB: after() — sync this student's row to Google Sheets
+        end
+    end</pre>
+<p><strong>The advisory lock matters because the attempt cap is a race condition otherwise:</strong> two near-simultaneous submits (a slow network retry, a double-tap) could both pass the "count prior attempts" check before either one's <code>INSERT</code> lands, producing two attempts where the product only allows one. <code>pg_advisory_xact_lock(hashtext(studentId:testId))</code> serializes any two requests for the _same_ student+test without taking a table-wide lock that would slow down every other student's submission.</p>
+<p><strong>Why the Sheets sync happens in <code>after()</code>, not before the response:</strong> the student is waiting on this response; a slow or failed third-party API call must never be the reason their test result is slow to show up. <code>after()</code> keeps the serverless function alive just long enough to finish that write after the response has already gone to the browser — the same pattern used for welcome emails after a bulk educator import.</p>
+<h2>Flow 3: certificate auto-unlock</h2>
+<p>A programme's certificate isn't generated — it's a live query. <code>GET /api/certificate?programId=X</code> checks that the user is enrolled in that programme and that every <code>Stage</code> under it (filtered to stages that are _published_ and _applicable to that user's role_ — see <code>isStageForRole</code>) has a passed <code>StageProgress</code>. If both hold, the certificate data is returned; if not, <code>403</code>.</p>
+<p>The "unlock" notification is a side effect of grading, not a separate check: <code>POST /api/mcq/[stageId]</code> grades the attempt, and if this was the attempt that newly passed the stage, it re-runs the same "every sibling stage passed?" check inline. If true, it fires a <code>Notification</code> of type <code>CERTIFICATE</code>. This is why a draft (unpublished) stage added to a programme used to lock every already-finished educator out of a certificate they'd earned — the "every stage passed" check didn't filter by <code>isPublished</code> until that was fixed; <code>isStageForRole</code>/<code>countedStageWhere</code> now share one definition of "counts" across the certificate route, the certificate list, and the notification trigger, so the three can't disagree again.</p>
+<h2>Where business logic lives vs. where it doesn't</h2>
+<div class='tw'><table><thead><tr><th>Lives in the route handler</th><th>Lives in a shared <code>lib/</code> function</th></tr></thead><tbody><tr><td>Parsing and validating the request body</td><td>Deciding if this user can see/edit this row</td></tr><tr><td>Fetching the specific records this request needs</td><td>Grading rules, attempt caps, schedule windows</td></tr><tr><td>Shaping the JSON response</td><td>Hashing/verifying passwords, signing/verifying tokens</td></tr><tr><td>Which Prisma calls run, and in what order/transaction</td><td>Rate-limit counting</td></tr></tbody></table></div>
+<p>The rule of thumb used throughout this codebase: if a decision needs to be made the same way in more than one route (or needs its own test without a database), it becomes a named function in <code>lib/</code>. If it's specific to one route's request/response shape, it stays inline.</p>
+</div>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const dark = !window.matchMedia("(prefers-color-scheme: light)").matches;
+mermaid.initialize({startOnLoad:true, theme: dark ? "dark" : "default", securityLevel:"strict"});
+</script></body></html>
