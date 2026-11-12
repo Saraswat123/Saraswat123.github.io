@@ -1,0 +1,35 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vault Harness: one payment, end to end</title>
+<style>:root{color-scheme:light dark;--bg:#f7f6f3;--fg:#1d1b16;--muted:#6b6558;--line:#e4e1da}@media(prefers-color-scheme:dark){:root{--bg:#12161b;--fg:#e7edf3;--muted:#9aa7b4;--line:#243040}}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 system-ui,sans-serif}.w{max-width:920px;margin:0 auto;padding:24px 16px 60px}a{color:inherit}h1{font-size:1.6rem}p{color:var(--muted)}
+pre.mermaid{border:1px solid var(--line);border-radius:12px;padding:16px;overflow-x:auto;text-align:center;background:transparent}</style></head><body><div class="w">
+<p><a href="/work/vault-harness/">← case study</a> · <a href="design.html">full design document</a> · <a href="trust-zones.html">trust zones</a></p>
+<h1>Vault Harness: one payment, end to end</h1><p>What runs for a real payment: the agent never appears between the card and the money.</p>
+<pre class="mermaid">
+sequenceDiagram
+  participant Owner
+  participant Agent
+  participant Guard
+  participant Browser as Kernel browser
+  participant Enclave
+  participant Stripe
+
+  Owner->>Owner: type card once (seal.js: X25519 → HKDF → AES-GCM)
+  Owner->>Enclave: ciphertext {epk, nonce, ct, aad=card_id}
+  Agent->>Guard: JSON proposal (merchant, amount, currency)
+  Guard->>Guard: freeze? → policy (cap/merchant/currency) → velocity → risk score
+  Guard->>Owner: Touch ID challenge (amount ≥ auto-limit)
+  Owner->>Enclave: signed approval assertion
+  Guard->>Enclave: issue_placeholder() — Visa-shaped, Luhn-valid, 10 min, bound to merchant+amount
+  Enclave->>Browser: placeholder card
+  Browser->>Stripe: fills checkout with placeholder
+  Stripe->>Enclave: tokenization request (intercepted)
+  Enclave->>Enclave: _gate (host+path allowlist) → _open card → _swap in real PAN
+  Enclave->>Stripe: real card, https, api.stripe.com/v1/payment_methods only
+  Stripe-->>Enclave: PaymentMethod id
+  Enclave-->>Guard: masked result (last4, brand) — card forgotten
+  Guard->>Guard: post-check: charge == approved amount, else halt
+      </pre></div><script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "default", securityLevel: "strict" });
+</script></body></html>

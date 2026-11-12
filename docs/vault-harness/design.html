@@ -1,0 +1,721 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<meta name="claude:viewport-fit-sides" content="cover" />
+<title>Vault Harness</title>
+<style>
+  /* Layout: single-column dossier scroll, dark security-console palette, mono accents for code/paths */
+  :root {
+    --bg: #0a0e13;
+    --surface: #121820;
+    --surface-2: #182029;
+    --border: #243040;
+    --fg: #e7edf3;
+    --fg-dim: #8fa0b3;
+    --fg-faint: #5c6b7d;
+    --accent: #36e2b4;
+    --accent-dim: #1f7a61;
+    --warn: #f0a93a;
+    --danger: #ef6a63;
+    color-scheme: dark;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  h1,
+  h2,
+  h3,
+  .display {
+    font-family: "Space Grotesk", system-ui, sans-serif;
+  }
+  code,
+  .mono,
+  .stat-num,
+  .pill-code {
+    font-family: "JetBrains Mono", monospace;
+  }
+  a {
+    color: var(--accent);
+  }
+  .wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 56px 0 90px;
+  }
+  .masthead {
+    margin-bottom: 48px;
+  }
+  .eyebrow {
+    color: var(--accent);
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(34px, 6vw, 52px);
+    line-height: 1.05;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+  .lede {
+    color: var(--fg-dim);
+    font-size: 18px;
+    max-width: 640px;
+    margin: 0 0 28px;
+  }
+  .byline {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 14px;
+    color: var(--fg-faint);
+  }
+  .byline b {
+    color: var(--fg);
+  }
+  .badge-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+  }
+  .badge {
+    font-size: 12px;
+    padding: 5px 11px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    color: var(--fg-dim);
+    background: var(--surface);
+  }
+  .badge.ok {
+    border-color: var(--accent-dim);
+    color: var(--accent);
+  }
+  .badge.warn {
+    border-color: #5c4719;
+    color: var(--warn);
+  }
+
+  section {
+    margin: 64px 0;
+  }
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .sec-num {
+    color: var(--fg-faint);
+    font-size: 14px;
+    font-family: "JetBrains Mono", monospace;
+  }
+  h2 {
+    font-size: 26px;
+    margin: 0;
+  }
+  p {
+    color: var(--fg-dim);
+    margin: 0 0 14px;
+    max-width: 680px;
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+  }
+
+  /* tech stack chips */
+  .stack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 14px;
+    margin-top: 8px;
+  }
+  .stack-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    min-width: 0;
+  }
+  .stack-card .k {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    margin-bottom: 6px;
+  }
+  .stack-card .v {
+    font-size: 14.5px;
+    color: var(--fg);
+  }
+
+  /* stat tiles */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px;
+    margin-top: 8px;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    min-width: 0;
+  }
+  .stat-num {
+    font-size: 26px;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-label {
+    font-size: 12.5px;
+    color: var(--fg-faint);
+    margin-top: 4px;
+  }
+
+  /* trust-zone table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14.5px;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    color: var(--fg-faint);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+  }
+  td {
+    color: var(--fg-dim);
+  }
+  td b,
+  td code {
+    color: var(--fg);
+  }
+  .tbl-wrap {
+    overflow-x: auto;
+  }
+  code {
+    background: var(--surface-2);
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-size: 13px;
+    color: var(--fg);
+  }
+
+  /* guardrail list */
+  .rail {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .rail-item {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .rail-step {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--accent);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .rail-body b {
+    color: var(--fg);
+    display: block;
+    margin-bottom: 2px;
+    font-size: 14.5px;
+  }
+  .rail-body span {
+    color: var(--fg-dim);
+    font-size: 13.5px;
+  }
+
+  /* known weaknesses */
+  .weak-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .weak-item {
+    border-left: 2px solid var(--warn);
+    padding: 4px 0 4px 14px;
+    color: var(--fg-dim);
+    font-size: 14.5px;
+  }
+  .weak-item b {
+    color: var(--fg);
+  }
+
+  .mermaid-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    overflow-x: auto;
+  }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+    color: var(--fg-faint);
+    font-size: 13.5px;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link
+  href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+  rel="stylesheet"
+/>
+
+<div class="wrap">
+  <p style="margin:0 0 18px;font-size:13px"><a href="/work/vault-harness/">← case study</a> · <a href="trust-zones.html">trust-zone diagram</a> · <a href="payment-sequence.html">payment sequence</a></p>
+  <div class="masthead">
+    <p class="eyebrow">Architecture case study</p>
+    <h1>Vault Harness</h1>
+    <p class="lede">
+      A payment harness that lets an AI agent pay online without ever seeing,
+      storing, or remembering a card number — card data is sealed in the owner's
+      browser and only ever exists in clear inside an isolated enclave, for one
+      payment.
+    </p>
+    <div class="byline">
+      <span><b>Saraswat Das</b> — Tech Lead</span>
+      <span>·</span>
+      <span>Solo design &amp; build, Oct–Nov 2026</span>
+      <span></span
+      >
+    </div>
+    <div class="badge-row">
+      <span class="badge ok">7 real payments confirmed on statement</span>
+      <span class="badge ok">219 tests passing offline</span>
+      <span class="badge ok">0 leaked card numbers</span>
+      <span class="badge warn">Nitro enclave: prepared, not run on AWS</span>
+      <span class="badge warn">Passkey: software authenticator only</span>
+    </div>
+  </div>
+
+  <section id="problem">
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <h2>The problem</h2>
+    </div>
+    <p>
+      Letting an LLM agent "just pay for something" is a credential-isolation
+      problem before it is an AI problem. The moment a card number or CVC
+      touches a prompt, a tool call, a log line, or a browser profile, it can
+      leak through prompt injection, a stray echo, or a crash dump. The brief:
+      build a harness where the agent proposes a payment, but
+      <b>never holds a secret</b> — isolation has to be structural, enforced by
+      code and a hardware boundary, not by asking the model nicely.
+    </p>
+  </section>
+
+  <section id="stack">
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <h2>Tech stack</h2>
+    </div>
+    <p>
+      Python throughout, chosen so every boundary (agent → guard → enclave →
+      processor) is a plain function or a socket call that can be tested in
+      isolation.
+    </p>
+    <div class="stack-grid">
+      <div class="stack-card">
+        <div class="k">Language / runtime</div>
+        <div class="v">Python 3.11</div>
+      </div>
+      <div class="stack-card">
+        <div class="k">Crypto</div>
+        <div class="v">X25519 · HKDF‑SHA256 · AES‑256‑GCM</div>
+      </div>
+      <div class="stack-card">
+        <div class="k">Human approval</div>
+        <div class="v">WebAuthn / Passkey (ES256)</div>
+      </div>
+      <div class="stack-card">
+        <div class="k">Isolation target</div>
+        <div class="v">AWS Nitro Enclaves + KMS</div>
+      </div>
+      <div class="stack-card">
+        <div class="k">Attestation</div>
+        <div class="v">NSM · COSE signature verify</div>
+      </div>
+      <div class="stack-card">
+        <div class="k">Browser automation</div>
+        <div class="v">Kernel (stateless cloud browser)</div>
+      </div>
+      <div class="stack-card">
+        <div class="k">Payments</div>
+        <div class="v">Stripe Checkout + PaymentMethods API</div>
+      </div>
+      <div class="stack-card">
+        <div class="k">Enclave transport</div>
+        <div class="v">vsock / TCP RPC server</div>
+      </div>
+      <div class="stack-card">
+        <div class="k">State / audit</div>
+        <div class="v">SQLite event store · hash‑chained ledger</div>
+      </div>
+      <div class="stack-card">
+        <div class="k">Front end</div>
+        <div class="v">Vanilla JS, WebCrypto (seal.js)</div>
+      </div>
+      <div class="stack-card">
+        <div class="k">Packaging</div>
+        <div class="v">Docker (Nitro image build)</div>
+      </div>
+      <div class="stack-card">
+        <div class="k">Testing</div>
+        <div class="v">pytest · golden eval harness</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="hld">
+    <div class="sec-head">
+      <span class="sec-num">03</span>
+      <h2>High-level design — trust zones</h2>
+    </div>
+    <p>
+      Six zones, each with a hard rule about what it may and may not hold. The
+      card is in clear in exactly two places: the owner's browser for the
+      instant it's typed, and the enclave for one payment.
+    </p>
+    <div class="mermaid-wrap">
+      <pre class="mermaid">
+flowchart TB
+  O["Owner's browser<br/>types card once → seals it"]
+  A["Agent (LLM)<br/>emits JSON only, no tools reach a key"]
+  G["Guard<br/>freeze → policy → velocity → risk"]
+  H["Harness host<br/>ciphertext + placeholders only"]
+  K["Kernel cloud browser<br/>stateless, no profile, sees placeholder"]
+  E["Enclave<br/>real card in memory, one payment, then forgets"]
+  S["Stripe<br/>processor"]
+
+  O -- "ciphertext {epk,nonce,ct,aad}" --> H
+  A -- "JSON proposal" --> G
+  G -- approved --> H
+  H -- "placeholder only" --> K
+  K -- "tokenization request" --> E
+  H -. "Touch ID assertion" .-> E
+  E -- "TLS, host+path allowlisted" --> S
+  E -. "masked result (last4, brand)" .-> H
+
+  classDef zone fill:#182029,stroke:#243040,color:#e7edf3;
+  classDef danger fill:#1b1410,stroke:#5c4719,color:#f0a93a;
+  class O,A,G,H,K,S zone
+  class E danger
+      </pre>
+    </div>
+    <div class="tbl-wrap panel" style="margin-top: 16px">
+      <table>
+        <tr>
+          <th>Zone</th>
+          <th>May hold</th>
+          <th>Must never hold</th>
+        </tr>
+        <tr>
+          <td><b>Agent / model</b></td>
+          <td>task text (redacted), a JSON proposal</td>
+          <td>any card field, any key — it has no tool that reaches one</td>
+        </tr>
+        <tr>
+          <td><b>Harness host</b></td>
+          <td>
+            ciphertext boxes, placeholders, masked results, API keys in
+            <code>.env</code>
+          </td>
+          <td>card in clear, CVC at rest</td>
+        </tr>
+        <tr>
+          <td><b>Kernel cloud browser</b></td>
+          <td>the placeholder, billing details, PaymentMethod ids</td>
+          <td>the real card</td>
+        </tr>
+        <tr>
+          <td><b>Enclave</b></td>
+          <td>the real card, in memory, for one payment</td>
+          <td>anything after the payment — it forgets</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="lld">
+    <div class="sec-head">
+      <span class="sec-num">04</span>
+      <h2>Low-level design — one payment, end to end</h2>
+    </div>
+    <p>
+      The sequence below is what actually runs for a real payment: the agent
+      never appears between the card and the money.
+    </p>
+    <div class="mermaid-wrap">
+      <pre class="mermaid">
+sequenceDiagram
+  participant Owner
+  participant Agent
+  participant Guard
+  participant Browser as Kernel browser
+  participant Enclave
+  participant Stripe
+
+  Owner->>Owner: type card once (seal.js: X25519 → HKDF → AES-GCM)
+  Owner->>Enclave: ciphertext {epk, nonce, ct, aad=card_id}
+  Agent->>Guard: JSON proposal (merchant, amount, currency)
+  Guard->>Guard: freeze? → policy (cap/merchant/currency) → velocity → risk score
+  Guard->>Owner: Touch ID challenge (amount ≥ auto-limit)
+  Owner->>Enclave: signed approval assertion
+  Guard->>Enclave: issue_placeholder() — Visa-shaped, Luhn-valid, 10 min, bound to merchant+amount
+  Enclave->>Browser: placeholder card
+  Browser->>Stripe: fills checkout with placeholder
+  Stripe->>Enclave: tokenization request (intercepted)
+  Enclave->>Enclave: _gate (host+path allowlist) → _open card → _swap in real PAN
+  Enclave->>Stripe: real card, https, api.stripe.com/v1/payment_methods only
+  Stripe-->>Enclave: PaymentMethod id
+  Enclave-->>Guard: masked result (last4, brand) — card forgotten
+  Guard->>Guard: post-check: charge == approved amount, else halt
+      </pre>
+    </div>
+    <p style="margin-top: 18px">
+      The guard's own decision pipeline, run before anything above the "issue
+      placeholder" line is allowed to happen:
+    </p>
+    <div class="rail">
+      <div class="rail-item">
+        <div class="rail-step">1</div>
+        <div class="rail-body">
+          <b>Freeze check</b
+          ><span
+            >Card or agent frozen? Refuse immediately — freezing never needs a
+            fingerprint.</span
+          >
+        </div>
+      </div>
+      <div class="rail-item">
+        <div class="rail-step">2</div>
+        <div class="rail-body">
+          <b>Policy</b
+          ><span
+            >Per-purchase cap, merchant/currency allowlist, schema validation —
+            unknown JSON fields rejected outright.</span
+          >
+        </div>
+      </div>
+      <div class="rail-item">
+        <div class="rail-step">3</div>
+        <div class="rail-body">
+          <b>Velocity</b
+          ><span
+            >Payments/min, /hour, /day and spend/hour, /day — checked on the
+            host <i>and</i> re-reserved inside the enclave.</span
+          >
+        </div>
+      </div>
+      <div class="rail-item">
+        <div class="rail-step">4</div>
+        <div class="rail-body">
+          <b>Risk score</b
+          ><span
+            >Real-time score against the last 200 payments' median; escalates to
+            human approval above a threshold.</span
+          >
+        </div>
+      </div>
+      <div class="rail-item">
+        <div class="rail-step">5</div>
+        <div class="rail-body">
+          <b>Human approval</b
+          ><span
+            >Touch ID above the auto-approve limit, verified inside the enclave,
+            not by the host.</span
+          >
+        </div>
+      </div>
+      <div class="rail-item">
+        <div class="rail-step">6</div>
+        <div class="rail-body">
+          <b>Post-check</b
+          ><span
+            >Charged amount must equal the approved amount, or the run halts and
+            alerts.</span
+          >
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="results">
+    <div class="sec-head">
+      <span class="sec-num">05</span>
+      <h2>Results</h2>
+    </div>
+    <div class="stat-grid">
+      <div class="stat">
+        <div class="stat-num">219</div>
+        <div class="stat-label">offline tests passing (7 skipped)</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">226</div>
+        <div class="stat-label">tests passing with live keys</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">36 / 36</div>
+        <div class="stat-label">golden eval cases (control, attack, leak)</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">0</div>
+        <div class="stat-label">card numbers found in anything a run wrote</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">7</div>
+        <div class="stat-label">
+          real $1 payments, confirmed on the card statement
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">18</div>
+        <div class="stat-label">reconciled Stripe sandbox payments</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">0.19 ms</div>
+        <div class="stat-label">full enclave decision, all checks + swap</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">~50 s</div>
+        <div class="stat-label">
+          real payment end to end (network + checkout page, not our code)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="weak">
+    <div class="sec-head">
+      <span class="sec-num">06</span>
+      <h2>Known weaknesses — stated, not hidden</h2>
+    </div>
+    <p>
+      A security design is only as credible as the gaps it admits. These are
+      tracked, not discovered by a reviewer:
+    </p>
+    <div class="weak-list">
+      <div class="weak-item">
+        <b>The enclave isn't hardware-isolated yet.</b> It's a separate program
+        and a Docker image; the AWS Nitro build, attestation and KMS plan are
+        written and tested only against synthetic documents.
+      </div>
+      <div class="weak-item">
+        <b>Budget and velocity counters live in enclave memory.</b> A host that
+        can restart the enclave resets them — rollback-proof, sealed counters
+        aren't built.
+      </div>
+      <div class="weak-item">
+        <b>Touch ID is tested against a software authenticator</b>, not yet a
+        real device.
+      </div>
+      <div class="weak-item">
+        <b>Per-payment CVC is the real scaling limit.</b> Stripe and PCI DSS
+        forbid storing one; a processor or network token (no CVC needed) is the
+        next step and isn't built.
+      </div>
+      <div class="weak-item">
+        <b>The local agent API is unauthenticated</b> — safe only because the
+        host is trusted; production needs a separate, authenticated agent
+        identity.
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span
+      >Private repository — details, architecture docs and the full test report
+      available on request.</span
+    >
+    <span class="mono">enclave.py · guard.py · policy.py · seal.js</span>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+  try {
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "base",
+      themeVariables: {
+        background: "#121820",
+        primaryColor: "#182029",
+        primaryTextColor: "#e7edf3",
+        primaryBorderColor: "#243040",
+        lineColor: "#5c6b7d",
+        secondaryColor: "#182029",
+        tertiaryColor: "#182029",
+        actorBkg: "#182029",
+        actorBorder: "#243040",
+        actorTextColor: "#e7edf3",
+        signalColor: "#8fa0b3",
+        signalTextColor: "#e7edf3",
+        labelBoxBkgColor: "#182029",
+        labelBoxBorderColor: "#243040",
+        labelTextColor: "#e7edf3",
+        loopTextColor: "#8fa0b3",
+        noteBkgColor: "#1b1410",
+        noteBorderColor: "#5c4719",
+        noteTextColor: "#f0a93a",
+        fontFamily: "Inter, system-ui, sans-serif",
+      },
+    });
+  } catch (e) {}
+</script>
+
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "default", securityLevel: "strict" });
+</script>
+
+</body></html>
