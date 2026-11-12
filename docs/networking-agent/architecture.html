@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Networking Agent</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2e3146;
+    --text: #e2e5f0;
+    --muted: #7b82a0;
+    --accent: #5b8dee;
+    --green: #3ecf8e;
+    --orange: #f59e0b;
+    --red: #f87171;
+    --purple: #a78bfa;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f8f9fc;
+      --surface: #ffffff;
+      --border: #d1d5e8;
+      --text: #1a1d27;
+      --muted: #5a6080;
+      --accent: #3b6fd4;
+      --green: #059669;
+      --orange: #d97706;
+      --red: #dc2626;
+      --purple: #7c3aed;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1117; --surface: #1a1d27; --border: #2e3146;
+    --text: #e2e5f0; --muted: #7b82a0; --accent: #5b8dee;
+    --green: #3ecf8e; --orange: #f59e0b; --red: #f87171; --purple: #a78bfa;
+  }
+  body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; margin: 0; padding: 24px 16px; }
+  h1 { font-size: 1.1rem; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 0.8rem; margin-bottom: 24px; }
+  figure { margin: 0 0 32px; }
+  figcaption { font-size: 0.78rem; color: var(--muted); margin-top: 8px; }
+  svg { max-width: 100%; height: auto; display: block; }
+</style>
+</head>
+<body>
+<p style="margin:12px 16px;font:13px system-ui,sans-serif"><a href="/work/networking-agent/" style="color:inherit">← case study</a></p>
+<h1>Networking Agent — Full Architecture</h1>
+<p class="sub">Docker stack · 56 MCP tools · Dir A/B pipeline · email waterfall · fund signals</p>
+
+<!-- FIGURE 1: Pipeline flow -->
+<figure>
+<svg viewBox="0 0 900 540" role="img" aria-label="End-to-end pipeline: Discover → Enrich → Score → Email Waterfall → Route → Dir A or Dir B → Send → Track" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+    <polygon points="0,0 8,3 0,6" fill="currentColor" opacity="0.6"/>
+  </marker>
+  <marker id="arr-g" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+    <polygon points="0,0 8,3 0,6" fill="#3ecf8e"/>
+  </marker>
+  <marker id="arr-o" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+    <polygon points="0,0 8,3 0,6" fill="#f59e0b"/>
+  </marker>
+</defs>
+
+<!-- background -->
+<rect width="900" height="540" fill="var(--bg)"/>
+
+<!-- ── STAGE LABELS (top) ── -->
+<text x="60" y="22" font-size="10" fill="var(--muted)" text-anchor="middle">DISCOVER</text>
+<text x="195" y="22" font-size="10" fill="var(--muted)" text-anchor="middle">ENRICH</text>
+<text x="330" y="22" font-size="10" fill="var(--muted)" text-anchor="middle">SCORE</text>
+<text x="460" y="22" font-size="10" fill="var(--muted)" text-anchor="middle">PEOPLE</text>
+<text x="590" y="22" font-size="10" fill="var(--muted)" text-anchor="middle">ROUTE</text>
+<text x="730" y="22" font-size="10" fill="var(--muted)" text-anchor="middle">DRAFT + SEND</text>
+<text x="860" y="22" font-size="10" fill="var(--muted)" text-anchor="middle">TRACK</text>
+
+<!-- ══ DISCOVER box ══ -->
+<rect x="10" y="35" width="100" height="190" rx="6" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+<text x="60" y="54" font-size="9.5" fill="var(--text)" text-anchor="middle" font-weight="600">Sources</text>
+<text x="60" y="72" font-size="8.5" fill="var(--muted)" text-anchor="middle">search_funding_news</text>
+<text x="60" y="86" font-size="8.5" fill="var(--muted)" text-anchor="middle">search_hn_hiring</text>
+<text x="60" y="100" font-size="8.5" fill="var(--muted)" text-anchor="middle">search_workatastartup</text>
+<text x="60" y="114" font-size="8.5" fill="var(--muted)" text-anchor="middle">search_remotive</text>
+<text x="60" y="128" font-size="8.5" fill="var(--muted)" text-anchor="middle">search_wellfound</text>
+<text x="60" y="142" font-size="8.5" fill="var(--muted)" text-anchor="middle">search_github_trending</text>
+<text x="60" y="156" font-size="8.5" fill="var(--muted)" text-anchor="middle">search_yc_companies</text>
+<text x="60" y="170" font-size="8.5" fill="var(--muted)" text-anchor="middle">get_yc_companies</text>
+<text x="60" y="184" font-size="8.5" fill="var(--muted)" text-anchor="middle">search_producthunt</text>
+<text x="60" y="198" font-size="8.5" fill="var(--muted)" text-anchor="middle">search_funding_news</text>
+
+<!-- arrow: discover → enrich -->
+<line x1="110" y1="130" x2="138" y2="130" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)" opacity="0.5"/>
+<text x="124" y="124" font-size="7.5" fill="var(--muted)" text-anchor="middle">save_prospect</text>
+
+<!-- ══ ENRICH box ══ -->
+<rect x="142" y="35" width="100" height="130" rx="6" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+<text x="192" y="54" font-size="9.5" fill="var(--text)" text-anchor="middle" font-weight="600">Enrich</text>
+<text x="192" y="70" font-size="8.5" fill="var(--muted)" text-anchor="middle">analyze_company_depth</text>
+<text x="192" y="84" font-size="8" fill="var(--accent)" text-anchor="middle">cached 7 days</text>
+<text x="192" y="100" font-size="8.5" fill="var(--muted)" text-anchor="middle">enrich_company</text>
+<text x="192" y="114" font-size="8.5" fill="var(--muted)" text-anchor="middle">lookup_tech_stack</text>
+<text x="192" y="128" font-size="8.5" fill="var(--muted)" text-anchor="middle">compute_fund_signal</text>
+<text x="192" y="142" font-size="8.5" fill="var(--muted)" text-anchor="middle">search_crunchbase</text>
+<text x="192" y="156" font-size="8.5" fill="var(--muted)" text-anchor="middle">search_gdelt_funding</text>
+
+<!-- arrow: enrich → score -->
+<line x1="242" y1="100" x2="270" y2="100" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)" opacity="0.5"/>
+
+<!-- ══ SCORE box ══ -->
+<rect x="274" y="35" width="108" height="130" rx="6" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+<text x="328" y="54" font-size="9.5" fill="var(--text)" text-anchor="middle" font-weight="600">Score</text>
+<text x="328" y="70" font-size="8.5" fill="var(--muted)" text-anchor="middle">score_repo_issues</text>
+<text x="328" y="84" font-size="8" fill="var(--muted)" text-anchor="middle">0-100, 7 signals</text>
+<text x="328" y="100" font-size="8.5" fill="var(--muted)" text-anchor="middle">check_repo_health</text>
+<text x="328" y="114" font-size="8.5" fill="var(--muted)" text-anchor="middle">check_issue_activity</text>
+<text x="328" y="128" font-size="8.5" fill="var(--muted)" text-anchor="middle">fetch_contributing_guide</text>
+<text x="328" y="142" font-size="8.5" fill="var(--muted)" text-anchor="middle">list_org_repos</text>
+<text x="328" y="156" font-size="8.5" fill="var(--muted)" text-anchor="middle">track_contribution</text>
+
+<!-- arrow: score → people -->
+<line x1="382" y1="100" x2="410" y2="100" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)" opacity="0.5"/>
+
+<!-- ══ PEOPLE / EMAIL WATERFALL box ══ -->
+<rect x="414" y="35" width="118" height="175" rx="6" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.2"/>
+<text x="473" y="54" font-size="9.5" fill="var(--accent)" text-anchor="middle" font-weight="600">Email Waterfall</text>
+<text x="473" y="70" font-size="8.5" fill="var(--muted)" text-anchor="middle">1. search_apollo_people</text>
+<text x="473" y="82" font-size="7.5" fill="var(--muted)" text-anchor="middle">  name+title free · email=credits</text>
+<text x="473" y="96" font-size="8.5" fill="var(--muted)" text-anchor="middle">2. find_person_email</text>
+<text x="473" y="108" font-size="7.5" fill="var(--muted)" text-anchor="middle">  Hunter /email-finder conf≥50</text>
+<text x="473" y="122" font-size="8.5" fill="var(--muted)" text-anchor="middle">3. github profile email</text>
+<text x="473" y="134" font-size="7.5" fill="var(--muted)" text-anchor="middle">  /users/{name} public field</text>
+<text x="473" y="148" font-size="8.5" fill="var(--muted)" text-anchor="middle">4. pattern generation</text>
+<text x="473" y="160" font-size="7.5" fill="var(--muted)" text-anchor="middle">  6 formats → verify_email</text>
+<text x="473" y="174" font-size="7.5" fill="var(--muted)" text-anchor="middle">  Hunter conf≥70 accept</text>
+<text x="473" y="188" font-size="7.5" fill="var(--muted)" text-anchor="middle">  unverified fallback conf=20</text>
+
+<!-- arrow: people → route -->
+<line x1="532" y1="100" x2="558" y2="100" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)" opacity="0.5"/>
+
+<!-- ══ ROUTE box ══ -->
+<rect x="562" y="55" width="76" height="90" rx="6" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+<text x="600" y="74" font-size="9.5" fill="var(--text)" text-anchor="middle" font-weight="600">Route</text>
+<text x="600" y="90" font-size="8.5" fill="var(--muted)" text-anchor="middle">route_prospect</text>
+<text x="600" y="104" font-size="8" fill="var(--green)" text-anchor="middle">Dir A 70%</text>
+<text x="600" y="116" font-size="8" fill="var(--orange)" text-anchor="middle">Dir B 30%</text>
+<text x="600" y="130" font-size="7.5" fill="var(--muted)" text-anchor="middle">hard-skip · comp filter</text>
+
+<!-- arrow: route → Dir A -->
+<line x1="638" y1="80" x2="670" y2="60" stroke="#3ecf8e" stroke-width="1.5" marker-end="url(#arr-g)"/>
+<text x="654" y="64" font-size="7.5" fill="#3ecf8e">A</text>
+
+<!-- arrow: route → Dir B -->
+<line x1="638" y1="120" x2="670" y2="150" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#arr-o)"/>
+<text x="654" y="144" font-size="7.5" fill="#f59e0b">B</text>
+
+<!-- ══ DIR A box ══ -->
+<rect x="672" y="32" width="140" height="90" rx="6" fill="var(--surface)" stroke="#3ecf8e" stroke-width="1.2"/>
+<text x="742" y="50" font-size="9" fill="#3ecf8e" text-anchor="middle" font-weight="600">Dir A — Proposal</text>
+<text x="742" y="64" font-size="8" fill="var(--muted)" text-anchor="middle">draft_company_proposal</text>
+<text x="742" y="76" font-size="8" fill="var(--muted)" text-anchor="middle">draft_proposal_email</text>
+<text x="742" y="88" font-size="7.5" fill="var(--muted)" text-anchor="middle">peer tone · PR first · no placeholders</text>
+<text x="742" y="100" font-size="7.5" fill="var(--muted)" text-anchor="middle">→ confirm "send it" → log_email_sent</text>
+<text x="742" y="113" font-size="7" fill="var(--muted)" text-anchor="middle">Funded startups</text>
+
+<!-- ══ DIR B box ══ -->
+<rect x="672" y="134" width="140" height="90" rx="6" fill="var(--surface)" stroke="#f59e0b" stroke-width="1.2"/>
+<text x="742" y="152" font-size="9" fill="#f59e0b" text-anchor="middle" font-weight="600">Dir B — Job Apply</text>
+<text x="742" y="166" font-size="8" fill="var(--muted)" text-anchor="middle">draft_warm_email</text>
+<text x="742" y="178" font-size="8" fill="var(--muted)" text-anchor="middle">tone=candidate · portfolio link</text>
+<text x="742" y="190" font-size="7.5" fill="var(--muted)" text-anchor="middle">→ confirm "send it" → log_email_sent</text>
+<text x="742" y="202" font-size="7" fill="var(--muted)" text-anchor="middle">Startups hiring engineers</text>
+<text x="742" y="214" font-size="7" fill="var(--muted)" text-anchor="middle">Contribute first, then email</text>
+
+<!-- arrow: Dir A → track -->
+<line x1="812" y1="77" x2="843" y2="77" stroke="#3ecf8e" stroke-width="1.2" marker-end="url(#arr-g)"/>
+<!-- arrow: Dir B → track -->
+<line x1="812" y1="179" x2="843" y2="179" stroke="#f59e0b" stroke-width="1.2" marker-end="url(#arr-o)"/>
+
+<!-- ══ TRACK box ══ -->
+<rect x="845" y="55" width="46" height="140" rx="6" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+<text x="868" y="77" font-size="8" fill="var(--text)" text-anchor="middle" font-weight="600">Track</text>
+<text x="868" y="92" font-size="7" fill="var(--muted)" text-anchor="middle">outreach</text>
+<text x="868" y="104" font-size="7" fill="var(--muted)" text-anchor="middle">_log</text>
+<text x="868" y="118" font-size="7" fill="var(--muted)" text-anchor="middle">contribs</text>
+<text x="868" y="132" font-size="7" fill="var(--muted)" text-anchor="middle">Sheet</text>
+<text x="868" y="147" font-size="7" fill="var(--muted)" text-anchor="middle">reply_</text>
+<text x="868" y="159" font-size="7" fill="var(--muted)" text-anchor="middle">monitor</text>
+<text x="868" y="174" font-size="7" fill="var(--muted)" text-anchor="middle">6h poll</text>
+
+<!-- ── FUND SIGNAL sub-panel ── -->
+<rect x="10" y="250" width="380" height="130" rx="6" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+<text x="196" y="270" font-size="9.5" fill="var(--text)" text-anchor="middle" font-weight="600">Fund Signal Scorer — compute_fund_signal</text>
+<text x="30" y="288" font-size="8.5" fill="var(--muted)">+40  SEC Form D (recent funding)</text>
+<text x="30" y="302" font-size="8.5" fill="var(--muted)">+20  open eng roles ≥ 3</text>
+<text x="30" y="316" font-size="8.5" fill="var(--muted)">+15  YC batch ≤ 2 yrs ago</text>
+<text x="30" y="330" font-size="8.5" fill="var(--muted)">+15  PH launch ≤ 60d</text>
+<text x="30" y="344" font-size="8.5" fill="var(--muted)">+15  GitHub active ≤ 14d</text>
+<text x="30" y="358" font-size="8.5" fill="var(--muted)">+10  team 2-20</text>
+<rect x="230" y="278" width="145" height="52" rx="4" fill="var(--bg)" stroke="var(--border)" stroke-width="1"/>
+<text x="303" y="295" font-size="8.5" fill="#3ecf8e" text-anchor="middle">≥60  HUNT NOW</text>
+<text x="303" y="309" font-size="8.5" fill="#f59e0b" text-anchor="middle">35-59  WARM</text>
+<text x="303" y="323" font-size="8.5" fill="var(--muted)" text-anchor="middle">&lt;35  WATCH</text>
+<text x="303" y="355" font-size="7.5" fill="var(--muted)" text-anchor="middle">Sources: EDGAR · GDELT · YC API</text>
+
+<!-- ── ISSUE SCORER sub-panel ── -->
+<rect x="400" y="250" width="280" height="130" rx="6" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+<text x="540" y="270" font-size="9.5" fill="var(--text)" text-anchor="middle" font-weight="600">Issue Scorer — score_repo_issues</text>
+<text x="416" y="288" font-size="8.5" fill="var(--muted)">recency · complexity · labels · linked PRs</text>
+<text x="416" y="302" font-size="8.5" fill="var(--muted)">comment activity · contributor count · doc quality</text>
+<text x="416" y="316" font-size="8.5" fill="var(--muted)">CLEAR / CONTESTED / TAKEN detection</text>
+<text x="416" y="330" font-size="8.5" fill="var(--muted)">penalty: contested issues, PR already open</text>
+<text x="416" y="348" font-size="7.5" fill="var(--accent)">score ≥ 60 → contribute → Dir A email</text>
+<text x="416" y="362" font-size="7" fill="var(--muted)">Best-fit issue scores 100  ★</text>
+
+<!-- ── DOCKER STACK panel ── -->
+<rect x="10" y="400" width="870" height="126" rx="6" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+<text x="445" y="420" font-size="9.5" fill="var(--text)" text-anchor="middle" font-weight="600">Docker Stack — networking-stack</text>
+
+<!-- container boxes -->
+<rect x="20" y="430" width="148" height="82" rx="5" fill="var(--bg)" stroke="#3ecf8e" stroke-width="1"/>
+<text x="94" y="447" font-size="8.5" fill="#3ecf8e" text-anchor="middle" font-weight="600">networking-agent</text>
+<text x="94" y="460" font-size="7.5" fill="var(--muted)" text-anchor="middle">Rust · 56 tools · stdio MCP</text>
+<text x="94" y="472" font-size="7.5" fill="var(--muted)" text-anchor="middle">190MB · healthy ✓</text>
+<text x="94" y="484" font-size="7.5" fill="var(--muted)" text-anchor="middle">ubuntu:24.04 runtime</text>
+<text x="94" y="498" font-size="7.5" fill="var(--muted)" text-anchor="middle">vol: db_data → /data/networking-agent.db</text>
+
+<rect x="178" y="430" width="148" height="82" rx="5" fill="var(--bg)" stroke="var(--accent)" stroke-width="1"/>
+<text x="252" y="447" font-size="8.5" fill="var(--accent)" text-anchor="middle" font-weight="600">reply-monitor</text>
+<text x="252" y="460" font-size="7.5" fill="var(--muted)" text-anchor="middle">Python 3.11 · na-agents:latest</text>
+<text x="252" y="472" font-size="7.5" fill="var(--muted)" text-anchor="middle">polls Gmail every 6h</text>
+<text x="252" y="484" font-size="7.5" fill="var(--muted)" text-anchor="middle">updates outreach_status=replied</text>
+<text x="252" y="498" font-size="7.5" fill="var(--muted)" text-anchor="middle">mounts credentials.json + token.json</text>
+
+<rect x="336" y="430" width="148" height="82" rx="5" fill="var(--bg)" stroke="var(--border)" stroke-width="1"/>
+<text x="410" y="447" font-size="8.5" fill="var(--text)" text-anchor="middle" font-weight="600">fund-watcher</text>
+<text x="410" y="460" font-size="7.5" fill="var(--muted)" text-anchor="middle">Python · background_agent.py</text>
+<text x="410" y="472" font-size="7.5" fill="var(--muted)" text-anchor="middle">company research signals</text>
+<text x="410" y="484" font-size="7.5" fill="var(--muted)" text-anchor="middle">runs → exits (cron-style)</text>
+<text x="410" y="498" font-size="7.5" fill="var(--muted)" text-anchor="middle">restart: on-failure</text>
+
+<rect x="494" y="430" width="148" height="82" rx="5" fill="var(--bg)" stroke="var(--border)" stroke-width="1"/>
+<text x="568" y="447" font-size="8.5" fill="var(--text)" text-anchor="middle" font-weight="600">networking-redis</text>
+<text x="568" y="460" font-size="7.5" fill="var(--muted)" text-anchor="middle">redis:7-alpine</text>
+<text x="568" y="472" font-size="7.5" fill="var(--muted)" text-anchor="middle">internal port 6379</text>
+<text x="568" y="484" font-size="7.5" fill="var(--muted)" text-anchor="middle">queue / deepagent backend</text>
+<text x="568" y="498" font-size="7.5" fill="var(--muted)" text-anchor="middle">running ✓</text>
+
+<rect x="652" y="430" width="220" height="82" rx="5" fill="var(--bg)" stroke="var(--red)" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="762" y="447" font-size="8.5" fill="var(--red)" text-anchor="middle" font-weight="600">deepagent-lab (disabled)</text>
+<text x="762" y="460" font-size="7.5" fill="var(--muted)" text-anchor="middle">LangGraph intake-agent:dev</text>
+<text x="762" y="472" font-size="7.5" fill="var(--muted)" text-anchor="middle">needs POSTGRES_URI to start</text>
+<text x="762" y="484" font-size="7.5" fill="var(--muted)" text-anchor="middle">:8123 → :8000 when enabled</text>
+<text x="762" y="498" font-size="7.5" fill="var(--muted)" text-anchor="middle">restart: "no"</text>
+
+</svg>
+<figcaption>Full networking-agent pipeline. Green border = running healthy. Dashed red = disabled. Arrow labels show the MCP tool call that crosses each boundary.</figcaption>
+</figure>
+
+<figure>
+<svg viewBox="0 0 700 300" role="img" aria-label="Email waterfall: 5 steps from Hunter person finder down to unverified fallback" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="arr2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+    <polygon points="0,0 8,3 0,6" fill="currentColor" opacity="0.6"/>
+  </marker>
+</defs>
+<rect width="700" height="300" fill="var(--bg)"/>
+<text x="350" y="22" font-size="11" fill="var(--text)" text-anchor="middle" font-weight="600">Email Waterfall — find_person_email</text>
+<text x="350" y="36" font-size="8.5" fill="var(--muted)" text-anchor="middle">Stop at first success. Each step raises confidence or falls to next.</text>
+
+<!-- step boxes -->
+<!-- step 1 -->
+<rect x="20" y="52" width="660" height="38" rx="5" fill="var(--surface)" stroke="#3ecf8e" stroke-width="1"/>
+<text x="36" y="69" font-size="9" fill="#3ecf8e" font-weight="600">1</text>
+<text x="55" y="69" font-size="9" fill="var(--text)">Hunter /email-finder</text>
+<text x="55" y="82" font-size="8" fill="var(--muted)">GET /v2/email-finder?domain=&amp;first_name=&amp;last_name= → accept if score ≥ 50</text>
+<rect x="590" y="60" width="80" height="18" rx="3" fill="var(--bg)"/>
+<text x="630" y="73" font-size="8" fill="#3ecf8e" text-anchor="middle">conf = score</text>
+
+<!-- arrow -->
+<line x1="350" y1="90" x2="350" y2="102" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr2)" opacity="0.4"/>
+<text x="360" y="100" font-size="7.5" fill="var(--muted)">miss / score &lt; 50</text>
+
+<!-- step 2 -->
+<rect x="20" y="104" width="660" height="38" rx="5" fill="var(--surface)" stroke="var(--accent)" stroke-width="1"/>
+<text x="36" y="121" font-size="9" fill="var(--accent)" font-weight="600">2</text>
+<text x="55" y="121" font-size="9" fill="var(--text)">GitHub public profile</text>
+<text x="55" y="134" font-size="8" fill="var(--muted)">GET /users/{username} → email field (only set if user made it public)</text>
+<rect x="590" y="112" width="80" height="18" rx="3" fill="var(--bg)"/>
+<text x="630" y="125" font-size="8" fill="var(--accent)" text-anchor="middle">conf = 95</text>
+
+<!-- arrow -->
+<line x1="350" y1="142" x2="350" y2="154" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr2)" opacity="0.4"/>
+<text x="360" y="152" font-size="7.5" fill="var(--muted)">email null</text>
+
+<!-- step 3 -->
+<rect x="20" y="156" width="660" height="38" rx="5" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+<text x="36" y="173" font-size="9" fill="var(--text)" font-weight="600">3</text>
+<text x="55" y="173" font-size="9" fill="var(--text)">Pattern generation → Hunter verify</text>
+<text x="55" y="186" font-size="8" fill="var(--muted)">6 formats: first@ · first.last@ · firstlast@ · f1last@ · f1.last@ · first_last@ → /email-verifier each</text>
+<rect x="590" y="164" width="80" height="18" rx="3" fill="var(--bg)"/>
+<text x="630" y="177" font-size="8" fill="var(--text)" text-anchor="middle">conf ≥ 70 ✓</text>
+
+<!-- arrow -->
+<line x1="350" y1="194" x2="350" y2="206" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr2)" opacity="0.4"/>
+<text x="360" y="204" font-size="7.5" fill="var(--muted)">all undeliverable</text>
+
+<!-- step 4 -->
+<rect x="20" y="208" width="660" height="38" rx="5" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+<text x="36" y="225" font-size="9" fill="var(--text)" font-weight="600">4</text>
+<text x="55" y="225" font-size="9" fill="var(--text)">Hunter domain-search scan</text>
+<text x="55" y="238" font-size="8" fill="var(--muted)">GET /v2/domain-search?domain= → scan all known emails for name match</text>
+<rect x="590" y="216" width="80" height="18" rx="3" fill="var(--bg)"/>
+<text x="630" y="229" font-size="8" fill="var(--text)" text-anchor="middle">conf = score</text>
+
+<!-- arrow -->
+<line x1="350" y1="246" x2="350" y2="258" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr2)" opacity="0.4"/>
+<text x="360" y="256" font-size="7.5" fill="var(--muted)">no match</text>
+
+<!-- step 5 fallback -->
+<rect x="20" y="260" width="660" height="30" rx="5" fill="var(--surface)" stroke="var(--red)" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="36" y="278" font-size="9" fill="var(--red)" font-weight="600">5</text>
+<text x="55" y="278" font-size="9" fill="var(--muted)">Unverified fallback — best pattern, unverified</text>
+<rect x="590" y="267" width="80" height="18" rx="3" fill="var(--bg)"/>
+<text x="630" y="280" font-size="8" fill="var(--red)" text-anchor="middle">conf = 20</text>
+
+</svg>
+<figcaption>Email waterfall — 5 steps, stops at first success. In practice one domain exhausted all 5 steps (conf 0, domain too new), one resolved at step 1, and one at step 2 through the GitHub profile.</figcaption>
+</figure>
+
+</body>
+</html>
+
+</body></html>
